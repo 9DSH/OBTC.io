@@ -103,6 +103,8 @@ class Fetching_data:
         Returns list of option dicts detail for given Instrument(s).
         If option_symbol is None, returns full chain list.
         """
+        
+        self._load_caches() 
         if not self._chains:
             return []
 
@@ -164,6 +166,8 @@ class Fetching_data:
         Limits to last 24h if show_24h_public_trades is True.
         Sorted by Entry_Date descending.
         """
+
+        self._load_caches() 
         if not self._trades:
             logger.warning("load_public_trades: No trade data available.")
             return []

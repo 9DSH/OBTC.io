@@ -3,12 +3,28 @@ import pandas as pd
 import numpy as np
 import os
 import logging
-from datetime import timezone
+from datetime import datetime, timedelta , timezone
+from db import SessionLocal, SystemState
 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+def get_last_update(key):
+    with SessionLocal() as session:
+        meta = session.query(SystemState).filter_by(key=key).first()
+        return meta.value_date if meta else None
+
+def set_last_update(key, value_dt):
+    with SessionLocal() as session:
+        meta = session.query(SystemState).filter_by(key=key).first()
+        if meta:
+            meta.value_date = value_dt
+        else:
+            meta = SystemState(key=key, value_date=value_dt)
+            session.add(meta)
+        session.commit()
 
 class TechnicalAnalysis:
     def __init__(
@@ -22,62 +38,82 @@ class TechnicalAnalysis:
         self.interval = interval
         self.technical_analysis_data_csv = technical_analysis_data_csv
         self.technical_analysis_data = pd.DataFrame()
-    
+        
     def get_technical_data(self):
-        """Load historical data from CSV, fetching it if not present."""
-        logger.info("Checking if daily data exists and loading if available")
+        """
+        Load historical data from CSV, fetching it if not present, with reliable, persistent (DB) interval tracking!
+        """
+        logger.info(f"Checking technical analysis update for {self.symbol} [{self.interval}]")
+        key = f"tech_{self.symbol}_{self.interval}_last_update"
+
+        now = datetime.utcnow()
+
+        # --- Daily (1d) Logic ---
         if self.interval == "1d":
-            if os.path.exists(self.technical_analysis_data_csv):
-                df = pd.read_csv(self.technical_analysis_data_csv)
-                logger.info(f"Loaded historical data for {self.symbol} on {self.interval} interval")
-                
-                df['date'] = pd.to_datetime(df['date'])
-                latest_date_in_data = df['date'].max().date()
-                current_date = pd.Timestamp.now().date()
+            # Always round down to date for daily
+            today = now.date()
+            last_update = get_last_update(key)
+            need_update = (last_update is None) or (today > last_update.date() if isinstance(last_update, datetime) else today > last_update)
 
-                if current_date > latest_date_in_data:
-                    logger.info(f"Fetching new analatical for {self.interval}...")
-                    self.technical_analysis_data = self.prepare_technical_data()
-                    trend_insights = self.analyze_market_trend(self.technical_analysis_data)
-                    return trend_insights
-                else:
-                    trend_insights = self.analyze_market_trend(df)
-                    return trend_insights
-            else:
+            if need_update:
+                logger.info(f"Fetching new analytical data for {self.symbol} interval {self.interval} (last: {last_update})")
                 self.technical_analysis_data = self.prepare_technical_data()
+                set_last_update(key, now)
                 trend_insights = self.analyze_market_trend(self.technical_analysis_data)
-                logger.info(f"No existing data found for {self.symbol} on {self.interval} interval. Fetching new data.")
-
                 return trend_insights
-         
-                 
-        elif self.interval == "4h":
-            if os.path.exists(self.technical_analysis_data_csv):
-                df = pd.read_csv(self.technical_analysis_data_csv)
-                logger.info(f"Loaded historical data for {self.symbol} on {self.interval} interval")
-
-                df['date'] = pd.to_datetime(df['date'])
-                latest_datetime_in_data = df['date'].max()
-
-                latest_hour_in_data = latest_datetime_in_data.hour
-                adjusted_hour = (latest_hour_in_data + 4) % 24
-                current_hour = pd.Timestamp.now(tz=timezone.utc).hour
-                current_date = pd.Timestamp.now().date()
-                latest_date_only = pd.Timestamp(latest_datetime_in_data).date()
-
-                if adjusted_hour > current_hour or current_date > latest_date_only:
-                    logger.info(f"Fetching new analatical for {self.interval}...")
+            else:
+                if os.path.exists(self.technical_analysis_data_csv):
+                    df = pd.read_csv(self.technical_analysis_data_csv)
+                    logger.info(f"Loaded historical data from CSV (no daily update needed today)")
+                    return self.analyze_market_trend(df)
+                else:
                     self.technical_analysis_data = self.prepare_technical_data()
+                    set_last_update(key, now)
                     trend_insights = self.analyze_market_trend(self.technical_analysis_data)
                     return trend_insights
+
+        # --- 4-hour Logic ---
+        elif self.interval == "4h":
+            def truncate_to_4h(dt):
+                return dt.replace(minute=0, second=0, microsecond=0, hour=(dt.hour//4)*4)
+            now_4h = truncate_to_4h(now)
+            last_update = get_last_update(key)
+            need_update = False
+            if last_update is None:
+                need_update = True
+            else:
+                # Accept both date and datetime in value_date, but always compare to datetime
+                if isinstance(last_update, datetime):
+                    last_update_4h = truncate_to_4h(last_update)
                 else:
-                    trend_insights = self.analyze_market_trend(df)
+                    last_update_4h = datetime.combine(last_update, datetime.min.time())
+                # Can update if we're in any window after last_update_4h
+                need_update = now_4h > last_update_4h
+
+            if need_update:
+                logger.info(f"Fetching new analytical data for {self.symbol} interval {self.interval} (last: {last_update})")
+                self.technical_analysis_data = self.prepare_technical_data()
+                set_last_update(key, now_4h)
+                trend_insights = self.analyze_market_trend(self.technical_analysis_data)
+                return trend_insights
+            else:
+                if os.path.exists(self.technical_analysis_data_csv):
+                    df = pd.read_csv(self.technical_analysis_data_csv)
+                    logger.info(f"Loaded historical data from CSV (no 4h update needed this interval)")
+                    return self.analyze_market_trend(df)
+                else:
+                    self.technical_analysis_data = self.prepare_technical_data()
+                    set_last_update(key, now_4h)
+                    trend_insights = self.analyze_market_trend(self.technical_analysis_data)
                     return trend_insights
+        else:
+            # fallback for 1h and others - just always run like your old behavior
+            if os.path.exists(self.technical_analysis_data_csv):
+                df = pd.read_csv(self.technical_analysis_data_csv)
+                return self.analyze_market_trend(df)
             else:
                 self.technical_analysis_data = self.prepare_technical_data()
                 trend_insights = self.analyze_market_trend(self.technical_analysis_data)
-                logger.info(f"No existing data found for {self.symbol} on {self.interval} interval. Fetching new data.")
-
                 return trend_insights
         
         

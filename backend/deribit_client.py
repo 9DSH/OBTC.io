@@ -14,8 +14,9 @@ from skopt import BayesSearchCV
 from sklearn.utils import resample
 import pandas as pd
 import re
+from datetime import date, datetime, timedelta, time
 
-from db import SessionLocal, OptionChain, PublicTrade
+from db import SessionLocal, OptionChain, PublicTrade, SystemState
 from config import DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET, MAX_CONCURRENT_REQUESTS
 
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +51,7 @@ class DeribitClient:
             logger.error(f"Authentication error: {e}")
             return None
     
-    def clean_block_trade_id(self, block_trade_id):
+    def clean_trade_id(self, block_trade_id):
         """
         Clean the BlockTrade_ID string:
         - Remove commas, spaces
@@ -288,7 +289,9 @@ class DeribitClient:
                             expiration_date, strike_price, option_type = self.parse_instrument_metadata(t.get('instrument_name'))
                             
                             raw_block_id = ','.join(t.get('block_trade_id', [])) if 'block_trade_id' in t else None
-                            cleaned_block_id = self.clean_block_trade_id(raw_block_id)
+                            raw_combo_id = ','.join(t.get('combo_trade_id', [])) if 'combo_trade_id' in t else None
+                            cleaned_block_id = self.clean_trade_id(raw_block_id)
+                            cleaned_combo_id = self.clean_trade_id(raw_combo_id)
 
                             new_trade = PublicTrade(
                                 Trade_ID=trade_id,
@@ -307,7 +310,7 @@ class DeribitClient:
                                 BlockTrade_IDs=cleaned_block_id,
                                 BlockTrade_Count=len(t.get('block_trade_id', [])) if 'block_trade_id' in t else None,
                                 Combo_ID=t.get('combo_id'),
-                                ComboTrade_IDs=','.join(t.get('combo_trade_id', [])) if 'combo_trade_id' in t else None,
+                                ComboTrade_IDs=cleaned_combo_id,
                             )
                             session.add(new_trade)
                             count += 1
@@ -326,18 +329,39 @@ class DeribitClient:
 
         await asyncio.get_running_loop().run_in_executor(self.executor, db_save)
         
-    def remove_expired_trades_from_db(self, session):
-        current_utc_datetime = datetime.utcnow()
-        if current_utc_datetime.hour >= 8:
-            cutoff_date = current_utc_datetime.date()
-        else:
-            cutoff_date = (current_utc_datetime - timedelta(days=1)).date()
-        cutoff_datetime = datetime.combine(cutoff_date, datetime.min.time())
 
-        num_deleted = session.query(PublicTrade) \
-            .filter(PublicTrade.Expiration_Date < cutoff_datetime) \
-            .delete(synchronize_session=False)
-        logger.info(f"Removed {num_deleted} expired public trades from DB before storing new trades.")
+    def remove_expired_trades_from_db(self, session):
+        now = datetime.utcnow()
+        today = now.date()
+        cleanup_time = time(8, 0)  # 08:00 UTC
+
+        # Determine the *intended* cycle date ("8th June cleanup is for trades expiring before 8th June...")
+        if now.hour >= 8:
+            this_cycle = today
+        else:
+            this_cycle = today - timedelta(days=1)
+
+        # Check the meta table for last cleanup
+        meta = session.query(SystemState).filter_by(key="last_public_trade_cleanup").first()
+        already_cleaned = (meta.value_date == this_cycle) if meta else False
+
+        if not already_cleaned and now >= datetime.combine(this_cycle, cleanup_time):
+            # Run your deletion logic
+            cutoff_datetime = datetime.combine(this_cycle, datetime.min.time())
+            num_deleted = session.query(PublicTrade) \
+                .filter(PublicTrade.Expiration_Date < cutoff_datetime) \
+                .delete(synchronize_session=False)
+            logger.info(f"Removed {num_deleted} expired public trades from DB before storing new trades.")
+
+            # Update state in DB
+            if meta:
+                meta.value_date = this_cycle
+            else:
+                meta = SystemState(key="last_public_trade_cleanup", value_date=this_cycle)
+                session.add(meta)
+            session.commit()
+        else:
+            logger.debug(f"No cleanup needed: already cleaned for {this_cycle} or not time yet.")
     
     def option_probabilities_with_greeks(self, df):
         df['Expiration Date'] = pd.to_datetime(df['Expiration Date'])

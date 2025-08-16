@@ -51,7 +51,13 @@ class PublicTrade(Base):
     BlockTrade_IDs = Column(String)       
     BlockTrade_Count = Column(Integer)
     Combo_ID = Column(String)
-    ComboTrade_IDs = Column(String)       
+    ComboTrade_IDs = Column(String)  
+
+class SystemState(Base):
+    __tablename__ = "system_state"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, unique=True, nullable=False)
+    value_date = Column(DateTime)     
 
 engine = create_engine(DB_URI, connect_args={"check_same_thread": False} if DB_URI.startswith('sqlite') else {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -10,9 +10,14 @@ sys.path.append(os.path.dirname(__file__))  # Ensure local path
 from Fetch_data import Fetching_data
 from db import init_db
 from main_data_stream import main as data_stream_main
+from Technical_Analysis import TechnicalAnalysis
+from fetch_btc_price import get_btcusd_price
 
 
 fetch_data = Fetching_data()
+technical_4h = TechnicalAnalysis("BTC-USD", "4h" ,'technical_analysis_4h.csv') 
+technical_daily = TechnicalAnalysis("BTC-USD", "1d" ,'technical_analysis_daily.csv') 
+technical_w = TechnicalAnalysis("BTC-USD", "1w" ,'technical_analysis_w.csv') 
 
 app = FastAPI(
     title="OptionBTC API",
@@ -23,7 +28,7 @@ app = FastAPI(
 # Enable CORS for your frontend app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +54,20 @@ def startup_event():
         data_stream_thread.start()
         logging.info("Background data fetcher started.")
 
+@app.get("/deribit/btcprice")
+async def get_btc_price_today():
+    try:
+        btc_price , highest, lowest = get_btcusd_price()
+        return {
+            "data": {
+                "btcprice": btc_price,
+                "highest": highest,
+                "lowest": lowest
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/option_chains/latest")
 async def option_chains():
     try:
@@ -69,24 +88,20 @@ async def public_trades():
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("/public_trades/available_dates")
-async def get_available_dates():
+
+@app.get("/analysis/technical")
+async def technical_analysis():
     try:
-        dates = fetch_data.fetch_available_dates()
-        return {"dates": dates}
+        analytics_insight_4h = technical_4h.get_technical_data()
+        analytics_insight_daily = technical_daily.get_technical_data()
+        return {
+            "data": {
+                "4h": analytics_insight_4h,
+                "1d": analytics_insight_daily
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-@app.get("/public_trades/strike_prices")   
-def get_strike_prices():
-    try:
-        prices = fetch_data.fetch_available_strike_prices()
-        return {"strike_prices": prices}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-
-
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

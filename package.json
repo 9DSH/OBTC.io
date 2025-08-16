@@ -1,17 +1,12 @@
 {
-    "name": "optionbtc_fullstack",
-    "version": "1.0.0",
-    "private": true,
-    "scripts": {
-        "start-backend": "python -m uvicorn backend.main:app --reload",
-        "start-frontend": "npm start --prefix frontend",
-        "start": "concurrently \"npm run start-backend\" \"npm run start-frontend\""
-    },
-    "devDependencies": {
-        "concurrently": "^9.2.0"
-    },
-    "dependencies": {
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0"
-    }
+  "name": "optionbtc_fullstack",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node start.js",
+    "start-frontend": "cd frontend && npm start"
+  },
+  "dependencies": {
+    "react": "^18.2.0"
+  }
 }
