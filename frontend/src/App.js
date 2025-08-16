@@ -14,17 +14,17 @@ export default function App() {
   const [loading, setLoading] = useState(true); // Unified loading
 
   const fetchTrades = async () => {
-    const tradesResp = await axios.get('http://localhost:8000/public_trades/latest');
+    const tradesResp = await axios.get('/public_trades/latest');
     setTrades(tradesResp.data.data || []);
   };
 
   const fetchAnalytics = async () => {
-    const analyticsResp = await axios.get('http://localhost:8000/analysis/technical');
+    const analyticsResp = await axios.get('/analysis/technical');
     setAnalytics(analyticsResp.data.data || {});
   };
 
   const fetchBtcPrice = async () => {
-    const priceResp = await axios.get('http://localhost:8000/deribit/btcprice');
+    const priceResp = await axios.get('/deribit/btcprice');
     setBtcPrice(priceResp.data.data || {});
   };
 
