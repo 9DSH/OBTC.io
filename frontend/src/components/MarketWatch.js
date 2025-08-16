@@ -1,0 +1,193 @@
+import React, { useState, useEffect } from 'react';
+import FilterBar, { DEFAULT_FILTERS } from './FilterBar';
+import TabsBar from './TabsBar';
+import InsightsTab from './InsightsTab';
+import StrategiesTab from './StrategiesTab';
+import TradesTable from './TradesTable';
+import DetailsBar from './DetailsBar';
+import RightSideBar from './RightSideBar';
+import AccountBar from './AccountBar';
+import TechnicalBar from './TechnicalBar';
+
+export default function TradeDashboard({ trades, 
+                                         loading , 
+                                         analytics, 
+                                         analyticsLoading, 
+                                         btcprice, 
+                                         priceLoading }) {
+
+  const [activeTab, setActiveTab] = useState('Insights');
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [selectedSegment, setSelectedSegment] = useState(null);
+  const [selectedSegment_RightSide, setSelectedSegment_RightSide] = useState(null);
+  const [contextId, setContextId] = useState(null);
+  const [contextId_RightSide, setContextId_RightSide] = useState(null);
+
+  // Prepare multi-select options
+  const strikePrices = Array.from(new Set(trades.map(t => t.Strike_Price))).sort((a, b) => a - b);
+  const expirationDates = Array.from(new Set(trades.map(t => t.Expiration_Date || t.Expiration)))
+    .sort((a, b) => new Date(a) - new Date(b));
+  
+  const tabNames = ['Insights','Strategies', 'Data Table'];
+
+   
+  useEffect(() => {
+    console.log("TradeDashboard: State updated - activeTab:", activeTab,
+                "selectedSegment:", selectedSegment,
+                  "contextId:", contextId,
+                  "selectedSegment_RightSide:", selectedSegment_RightSide,
+                    "contextId_RightSide:", contextId_RightSide);
+  }, [activeTab, selectedSegment, contextId, selectedSegment_RightSide, contextId_RightSide]);
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        width: '100vw',
+        fontSize: "28px",
+        fontFamily: "'Roboto', sans-serif"
+      }}>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+ // -----------------------------------------------------------------
+// --------------------handles selected segments -------------------
+// -----------------------------------------------------------------
+function handleSegmentSelect(event) {
+  if (!event) return;
+
+  const {
+    selectedSegment: newSelectedSegment,
+    contextId: newContextId,
+    selectedSegment_RightSide: newRightSideSegment,
+    contextId_RightSide: newRightSideContextId
+  } = event;
+
+  // RESET DetailsBar if both are null
+  if (newSelectedSegment === null && newContextId === null) {
+    setSelectedSegment(null);
+    setContextId(null);
+  }
+
+  // Handle RightSideBar updates
+  if (newRightSideSegment && newRightSideContextId) {
+    setSelectedSegment_RightSide(newRightSideSegment);
+    setContextId_RightSide(newRightSideContextId);
+  }
+
+  // Handle DetailsBar updates
+  if (newSelectedSegment && newContextId) {
+    setSelectedSegment(newSelectedSegment);
+    setContextId(newContextId);
+  }
+}
+
+ 
+// -------------------- TabBar Container -------------------------------------
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'Insights':
+        return (
+          <InsightsTab
+            data={trades}
+            filters={filters}
+            onSegmentSelect={handleSegmentSelect}
+          />
+        );
+      case 'Strategies':
+        return (
+          <StrategiesTab
+            data={trades}
+            filters={filters}
+            onSegmentSelect={handleSegmentSelect}
+          />
+        );
+      case 'Data Table':
+      default:
+        return (
+          <TradesTable
+            data={trades}
+            filters={filters}
+            onSegmentSelect={handleSegmentSelect}
+          />
+        );
+    }
+  };
+
+// -----------------------------------------------------------------
+// -------------------- Main Dashboard -------------------------------------
+// -----------------------------------------------------------------
+  return (
+    <div
+   // Main Trade Dashboard Container  --------------------
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        alignItems : 'center',
+        minHeight: '100vh',
+        padding: '20px 0',
+        overflowX: 'hidden',
+      }}
+    >
+      {/* Technical Bar */}
+      <TechnicalBar 
+        analytics={analytics} 
+        loading={analyticsLoading} 
+        btcpriceData={btcprice}
+        priceLoading={priceLoading}
+        />
+      {/* Fixed User bar container */}
+      <AccountBar/>
+      {/* Fixed Top Filter */}
+      <FilterBar
+        filters={filters}
+        setFilters={setFilters}
+        options={{ strikePrices, expirationDates }}
+      />
+
+      {/* Tab Navigation */}
+      <TabsBar
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          // Reset DetailsBar for all tabs
+          setSelectedSegment(null);
+          setContextId(null);
+          setSelectedSegment_RightSide(null);
+          setContextId_RightSide(null);
+       
+        }}
+        tabNames = {tabNames}
+      />
+
+      {/* Main Content Area for TabBars */}
+      
+      <div style={{ flex: 1, padding: '0 20px' }}>{renderTabContent()}</div>
+
+      {/* Fixed Bottom Details */}
+      <DetailsBar
+        activeTab={activeTab}
+        selectedSegment={selectedSegment}
+        filters={filters}
+        contextId={contextId}
+      />
+
+      {/* Fixed Right Sidebar */}
+      <RightSideBar
+        activeTab={activeTab}
+        selectedSegment={selectedSegment_RightSide}
+        filters={filters}
+        contextId={contextId_RightSide}
+        onSegmentSelect={handleSegmentSelect}
+      />
+    </div>
+  );
+}
+

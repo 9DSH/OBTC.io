@@ -1,0 +1,187 @@
+/* ===== React Datepicker (Dark Themed with Variables) ===== */
+/* In FilterBar.css */
+.react-datepicker-popper {
+  z-index: 99999 !important; /* Extremely high to override everything */
+  position: fixed !important; /* Ensure it’s not constrained by parent */
+}
+.react-datepicker {
+  background-color: rgba(30, 31, 41, 0.874) !important;
+  color: var(--color-text) !important;
+  border-radius: 10px;
+  font-family: 'Roboto', sans-serif;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+  border: 1px solid #333;
+  z-index: 10000 !important;
+}
+
+.react-datepicker__header {
+  background-color: rgba(58, 58, 61, 0.714) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #333;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header {
+  color: #bfbfbf;
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day,
+.react-datepicker__time-name {
+  color: #9c9b9b;
+}
+
+/* === Hover circle === */
+.react-datepicker__day:hover,
+.react-datepicker__time-name:hover {
+  background-color: #3e434c;
+  color: #000;
+  border-radius: 50% !important;
+  cursor: pointer;
+}
+
+/* === Selected date and range styling === */
+.react-datepicker__day--selected,
+.react-datepicker__day--in-range,
+.react-datepicker__day--start-range,
+.react-datepicker__day--end-range {
+  background-color: var(--color-primary) !important;
+  color: #fff !important;
+  border: 1px solid gray !important;
+  border-radius: 50% !important;
+}
+
+.react-datepicker__day--keyboard-selected {
+  background-color: var(--color-primary) !important;
+  color: #fff !important;
+  border: 1px solid gray !important;
+  border-radius: 50% !important;
+}
+
+/* === Time Picker List === */
+.react-datepicker__time-list-item {
+  font-size: 0.75rem;
+  line-height: 2;
+  color: #9f9f9f;
+  padding: 6px 12px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.react-datepicker__time-list-item--selected {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+  padding: 2px 6px !important;
+  font-size: 0.7rem !important;
+  max-height: 20px !important;
+  border-radius: 4px !important;
+}
+
+.react-datepicker__time-list-item:hover {
+  background-color: var(--color-primary-hover) !important;
+  color: #fff !important;
+  font-size: 0.8rem !important;
+  line-height: 2 !important;
+  text-align: center;
+}
+
+/* === Time Container === */
+.react-datepicker__time-container {
+  background-color: var(--color-surface) !important;
+  border-left: 1px solid #333;
+  color: var(--color-text);
+}
+
+.react-datepicker__time-header {
+  background-color: #1b1c22;
+  border-bottom: 1px solid #333;
+  color: #bbb;
+}
+
+.react-datepicker__time {
+  display: flex;
+  justify-content: center;
+}
+
+.react-datepicker__time-list {
+  background-color: var(--color-surface);
+  color: #ddd;
+  max-height: 200px;
+  scrollbar-width: thin;
+  scrollbar-color: #555 transparent;
+}
+
+/* === Input Styling === */
+.react-datepicker__input-container input {
+  background-color: var(--color-background) !important;
+  color: var(--color-text) !important;
+  border: 1px solid #333 !important;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  width: 100%;
+  caret-color: var(--color-secondary);
+  transition: border-color 0.3s ease;
+}
+
+.react-datepicker__input-container input:focus {
+  outline: none;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 5px var(--color-primary);
+}
+
+/* === Close Button === */
+.react-datepicker__close-icon::after {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+}
+
+/* ===== MUI Select & Checkbox Overrides ===== */
+
+.MuiMenuItem-root {
+  font-size: 0.75rem !important;
+  min-height: 32px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+.MuiMenu-list {
+  font-size: 0.75rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.MuiListItemText-root .MuiTypography-root {
+  font-size: 0.75rem !important;
+}
+
+.MuiCheckbox-root svg {
+  font-size: 1rem !important;
+}
+
+/* === Selected Menu Item === */
+.MuiMenuItem-root.Mui-selected {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+}
+
+.MuiMenuItem-root.Mui-selected:hover {
+  background-color: var(--color-primary-hover) !important;
+  color: white !important;
+}
+
+/* === Checked Checkbox === */
+.MuiCheckbox-root.Mui-checked svg {
+  color: var(--color-background-bar) !important;
+}
+
+/* === Dropdown Paper === */
+.MuiPaper-root.MuiMenu-paper {
+  background-color: rgba(4, 2, 9, 0.652) !important;
+  backdrop-filter: blur(5px);
+  color: var(--color-text) !important;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+  
+}

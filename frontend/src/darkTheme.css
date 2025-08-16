@@ -1,0 +1,105 @@
+/* ===== Dark Theme - Global Variables ===== */
+:root {
+  /* Primary Theme Colors */
+  --color-primary: #596198;
+  --color-primary-hover: #3e434c;
+  --color-darkPurple: #24263e;
+  --color-accent: #ad4444;
+  --color-secondary: #FF6F61;
+  --color-background: #0E1117;
+  --color-background-bar: #1b1c22;
+  --color-background-tooltip: #1b1c22;
+  
+  --color-heatmap-tooltip: rgba(49, 49, 100, 0.738);
+  --color-surface: #121212;
+  --color-text: #e0e0e0;
+  --color-muted: #aaa;
+  --color-hover-trans: rgba(255, 255, 255, 0.05);
+
+  /* Status Colors */
+  --color-success: #4caf50;
+  --color-warning: #ffc107;
+  --color-error: #e53935;
+  --color-info: #2196f3;
+
+  /* Scrollbar */
+  --color-scrollbar-thumb: #444;
+
+    /* options */
+  --color-sell-call: "darkorange";
+  --color-sell-put: "darkred";
+  --color-buy-call: "teal";
+  --color-buy-put:"green";
+}
+
+/* ===== Base Styles ===== */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  overflow-x: hidden;     /* Prevent horizontal scroll */
+  overflow-y: auto;       /* Allow vertical scroll if needed */
+  box-sizing: border-box;
+}
+
+/* Reset and Layout Normalization */
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+/* Anchor tags */
+a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+
+/* ===== Scrollbar Styling ===== */
+*::-webkit-scrollbar {
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar-thumb);
+  border-radius: 4px;
+}
+
+/* ===== MUI Overrides ===== */
+.MuiInputBase-root,
+.MuiInputBase-input {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text) !important;
+}
+
+.MuiInputLabel-root {
+  color: var(--color-muted) !important;
+}
+
+.MuiButton-containedPrimary {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+}
+.MuiButton-containedPrimary:hover {
+  background-color: var(--color-primary-hover) !important;
+}
+
+/* ===== Utility Helpers (Optional but Useful) ===== */
+.no-scroll {
+  overflow: hidden !important;
+}
+.flex {
+  display: flex;
+}
+.center {
+  justify-content: center;
+  align-items: center;
+}
+.fill {
+  width: 100%;
+  height: 100%;
+}
+.full-height {
+  height: 100vh;
+}
