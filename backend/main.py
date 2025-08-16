@@ -28,7 +28,7 @@ app = FastAPI(
 # Enable CORS for your frontend app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "https://optionbtc.io", "https://www.optionbtc.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

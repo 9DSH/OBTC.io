@@ -1,12 +1,19 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { Chart, LinearScale, CategoryScale, PointElement } from 'chart.js';
+import {
+  Chart,
+  ScatterController,
+  LinearScale,
+  PointElement,
+  Tooltip,
+  Legend
+} from 'chart.js';
 import { formatStrikeLabel, formatExpirationLabel, formatDateTimeLabel } from '../utils/chartHelpers';
 import {
   groupStrategies,
   filterStrategies,
 } from "./Strategy/utils/strategiesUtils";
 
-Chart.register(LinearScale, CategoryScale, PointElement);
+Chart.register(ScatterController, LinearScale, PointElement, Tooltip, Legend);
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const lerpColor = (c1, c2, t) => c1.map((v, i) => Math.round(lerp(v, c2[i], t)));
