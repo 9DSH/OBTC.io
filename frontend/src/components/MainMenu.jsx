@@ -42,7 +42,6 @@ export default function MainMenu({ loading }) {
 
   return (
 
-    
     <div
       style={{
         position: 'absolute',
@@ -63,12 +62,18 @@ export default function MainMenu({ loading }) {
           }}
         >
           <img
-            src="/logotype.png"
+            src="/logoType.png"
             alt="logo"
-            style={{ width: 'Clamp(10rem, 10vw,17rem)', 
-                    height: 'Clamp(1rem, 2vw,3rem)', 
+            style={{ width: 'clamp(10rem, 10vw,17rem)', 
+                    height: 'clamp(1rem, 2vw,3rem)', 
                     objectFit: 'contain'}}
           />
+          
+    <div style={{marginLeft: 20,fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
+      
+    }}> 
+    v1.0.0
+     </div>
         </div>
       {/* Market Watch */}
       <NavLink
