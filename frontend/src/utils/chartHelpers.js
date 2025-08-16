@@ -28,8 +28,10 @@ export function formatStrikeLabel(value) {
     ? `${(value / 1000000).toFixed(value % 1000000 === 0 ? 0 : 1)}M`
     : value >= 1000
     ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}k`
-        : value < 1000
+    : value < 1000 && value > 1
     ? `${value.toFixed(0)}`
+    : value < 1
+    ? `${value.toFixed(1)}`
     : String(value);
 }
 
