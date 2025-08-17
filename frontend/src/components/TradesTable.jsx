@@ -232,7 +232,7 @@ export default function TradesTable({ data = [], filters }) {
   const visible = rows.slice(0, 10);
 
   return (
-    <div style={{ marginTop: '1rem'  }}>
+    <div >
       <div
         style={{
           overflowX: 'auto',
@@ -240,7 +240,7 @@ export default function TradesTable({ data = [], filters }) {
           alignItems: 'center',
           textAlign: 'center',
           padding: '0 0.5rem',
-          marginTop: '1rem',
+          marginTop: '0.5rem',
         }}
       >
         <table

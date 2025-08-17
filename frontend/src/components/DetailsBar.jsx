@@ -14,7 +14,7 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 export default function DetailsBar({ activeTab, selectedSegment, filters, contextId, width = '100%', height = 'clamp(200px, 30vh, 320px)' }) {
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(false);
     const [simulationData, setSimulationData] = useState(null);
     const [followData, setFollowData] = useState(null);
     
@@ -25,7 +25,11 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
     };
 
     useEffect(() => {
-        setIsExpanded(true);
+        if (selectedSegment) {
+            setIsExpanded(true);
+        } else {
+            setIsExpanded(false);
+        }
     }, [activeTab, selectedSegment]);
 
     const styles = {
@@ -36,8 +40,8 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             right: 0,
             margin: '0 auto',
             maxWidth: '1240px',
-            width: 'clamp(320px, 85vw, 1240px)',
-            height: isExpanded ? 'clamp(300px, 30%, 320px)' : 'clamp(35px, 5%, 50px)' ,
+            width: 'clamp(700px, 70vw, 1240px)',
+            height: isExpanded ? 'clamp(300px, 35vh, 350px)' : 'clamp(25px, 2vh, 50px)' ,
             backgroundColor: 'rgba(27, 28, 34, 0.7)',
             backdropFilter: 'blur(10px)',
             padding: isExpanded ? 'clamp(8px, 2vw, 12px)' : '0',
@@ -85,7 +89,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
         },
         grid: {
             display: 'flex',
-            flexWrap: 'wrap',
+            flexWrap: 'nowrap',
             justifyContent: 'center',
             alignItems: 'flex-start',
             overflowX: 'hidden',
@@ -93,16 +97,16 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
         chartBox: {
             flex: '1 1 clamp(180px, 18vw, 220px)',
             maxWidth: 'clamp(220px, 22vw, 280px)',
-            minWidth: 'clamp(150px, 15vw, 180px)',
+            minWidth: 'clamp(180px, 10vw, 200px)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'flex-start',
-            padding: 'clamp(6px, 1vw, 8px)',
+            padding: '1rem 0.2rem',
             boxSizing: 'border-box',
         },
         chartTitle: {
-            fontSize: 'clamp(12px, 1vw, 14px)',
+            fontSize: 'clamp(9px, 1vw, 12px)',
             color: '#eee',
             fontWeight: 'bold',
             marginBottom: 'clamp(4px, 0.5vh, 6px)',
@@ -469,35 +473,49 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
 
         const getDoughnutChartData = (trades) => {
             const total = trades.length;
+        
+            // group by expiration
             const byExp = trades.reduce((acc, t) => {
                 const label = formatDateLabel(t.Expiration_Date);
-                acc[label] = (acc[label] || 0) + 1;
+                if (!acc[label]) {
+                    acc[label] = { count: 0, entryValue: 0 };
+                }
+                acc[label].count += 1;
+                acc[label].entryValue += t.Entry_Value || 0;
                 return acc;
             }, {});
-
-            const entries = Object.entries(byExp).map(([label, count]) => ({
+        
+            const entries = Object.entries(byExp).map(([label, obj]) => ({
                 label,
-                count,
-                percentage: ((count / total) * 100).toFixed(2),
+                count: obj.count,
+                entryValue: obj.entryValue,
+                percentage: ((obj.count / total) * 100).toFixed(2),
             }));
-
+        
             entries.sort((a, b) => b.percentage - a.percentage);
+        
             const labels = entries.map(({ label }) => label);
             const values = entries.map(({ percentage }) => percentage);
             const colors = generateCustomGradientColors('#283254', '#868dba', values);
-
+        
             return {
                 labels,
-                datasets: [{
-                    label: 'Expiration %',
-                    data: values,
-                    backgroundColor: colors.slice(0, values.length),
-                    borderColor: '#121212',
-                    borderWidth: 1,
-                }],
+                datasets: [
+                    {
+                        label: 'Expiration %',
+                        data: values,
+                        backgroundColor: colors.slice(0, values.length),
+                        borderColor: '#121212',
+                        borderWidth: 1,
+                        extra: entries.map(e => ({
+                            entryValue: e.entryValue,
+                            percentage: e.percentage,
+                        })),
+                    },
+                ],
             };
         };
-
+        
         const chartOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -505,11 +523,29 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             layout: { padding: { top: 20, bottom: 20, left: 50, right: 50 } },
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: (context) => ` ${context.raw}%` } },
+                tooltip: {
+                    displayColors: false,   // 🔹 removes the color box
+                    callbacks: {
+                        label: (context) => {
+                            const dataset = context.dataset;
+                            const index = context.dataIndex;
+                            const extra = dataset.extra?.[index];
+        
+                            if (extra) {
+                                return [
+                                    ` Distribution: ${extra.percentage}%`,
+                                    ` Total Value: ${formatStrikeLabel(extra.entryValue)}`
+                                ];
+                            }
+                            return ` ${context.raw}%`;
+                        },
+                    },
+                },
                 datalabels: {
                     color: '#aaa',
-                    formatter: (_, context) => context.chart.data.labels[context.dataIndex],
-                    font: { size: 9.5, weight: 'bold' },
+                    formatter: (_, context) =>
+                        context.chart.data.labels[context.dataIndex],
+                    font: { size: 9, weight: 'bold' },
                     align: 'end',
                     anchor: 'end',
                     offset: 1,
@@ -519,12 +555,21 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                 },
             },
         };
-
+        
+        
         const renderChart = (label) => {
             const trades = groupedData[label] || [];
             return (
                 <div key={label} style={styles.chartBox}>
-                    <div style={styles.chartTitle}>{label}</div>
+                    <div style={styles.chartTitle}>
+                        {label}
+                    </div>
+        
+                    {/* 🔹 Show total trades count */}
+                    <div style={{ fontSize: 'clamp(8px, 1vw, 10px)', 
+                                   fontWeight: 400, 
+                                    color: "rgb(154, 154, 154)" }}> {trades.length} Trade{trades.length !== 1 ? 's' : ''}</div>
+        
                     {trades.length === 0 ? (
                         <div style={styles.emptyBox}>No trades...</div>
                     ) : (
@@ -535,11 +580,21 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                 </div>
             );
         };
+         
+            // 🔹 Aggregate values for the selected segment
+        const allTrades = Object.values(groupedData).flat();
+        const totalTrades = allTrades.length;
+        const totalValue = allTrades.reduce((sum, t) => sum + (t.Entry_Value || 0), 0);
+        const totalBlockTrades = allTrades.reduce((sum, t) => sum + (t.BlockTrade_Count || 0), 0);
+
 
         return (
             <div style={styles.content}>
-                <div style={{ color: '#ccc', marginBottom: 8, textAlign: 'center', marginTop: 8 }}>
-                    <strong style={{ color: '#fff' }}>Expiration date for Strike Price:</strong> {strike}
+               <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px', }}>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Strike Price </div> <span><CustomTooltip content={`Strike Price: ${formatStrikeLabel(strike)}`}> {formatStrikeLabel(strike)} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'}}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Trades </div> <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'}}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Total Values </div> <span><CustomTooltip content={`Total values: ${formatStrikeLabel(totalValue)}`}>  ${formatStrikeLabel(totalValue)} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'}}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> BlockTrades </div> <span><CustomTooltip content={`Number of Block Trades in this strike: ${totalBlockTrades}`}> {totalBlockTrades} </CustomTooltip> </span> </div>
                 </div>
                 <div style={styles.grid}>
                     {['Buy Call', 'Sell Call', 'Buy Put', 'Sell Put'].map(renderChart)}
@@ -632,20 +687,34 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
 
         const getDoughnutChartData = (typeTrades) => {
             const total = typeTrades.length;
+        
+            // group by strike or expiration, also sum entry values
             const byField = typeTrades.reduce((acc, t) => {
-                const key = isStrikePriceMode ? (t.Expiration_Date ? formatExpirationLabel(t.Expiration_Date) : "Unknown") : (t.Strike_Price ? formatStrikeLabel(t.Strike_Price) : "Unknown");
-                acc[key] = (acc[key] || 0) + 1;
+                const key = isStrikePriceMode
+                    ? (t.Expiration_Date ? formatExpirationLabel(t.Expiration_Date) : "Unknown")
+                    : (t.Strike_Price ? formatStrikeLabel(t.Strike_Price) : "Unknown");
+        
+                if (!acc[key]) {
+                    acc[key] = { count: 0, entryValue: 0 };
+                }
+                acc[key].count += 1;
+                acc[key].entryValue += t.Entry_Value || 0;
                 return acc;
             }, {});
-
-            const entries = Object.entries(byField).map(([label, count]) => ({
-                label, count, percentage: total > 0 ? ((count / total) * 100).toFixed(2) : 0,
+        
+            const entries = Object.entries(byField).map(([label, obj]) => ({
+                label,
+                count: obj.count,
+                entryValue: obj.entryValue,
+                percentage: total > 0 ? ((obj.count / total) * 100).toFixed(2) : 0,
             }));
+        
             entries.sort((a, b) => b.count - a.count);
+        
             const labels = entries.map(({ label }) => label);
             const values = entries.map(({ percentage }) => percentage);
             const colors = generateCustomGradientColors('#283254', '#868dba', values);
-
+        
             return {
                 labels,
                 datasets: [{
@@ -654,10 +723,14 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                     backgroundColor: colors.slice(0, values.length),
                     borderColor: '#121212',
                     borderWidth: 1,
+                    extra: entries.map(e => ({
+                        entryValue: e.entryValue,
+                        percentage: e.percentage,
+                    })),
                 }],
             };
         };
-
+        
         const chartOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -665,7 +738,23 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             layout: { padding: { top: 20, bottom: 20, left: 50, right: 50 } },
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: (context) => ` ${context.raw}%` } },
+                tooltip: {
+                    displayColors: false,  // 🔹 removes color box
+                    callbacks: {
+                        label: (context) => {
+                            const dataset = context.dataset;
+                            const index = context.dataIndex;
+                            const extra = dataset.extra?.[index];
+                            if (extra) {
+                                return [
+                                    ` Distribution: ${extra.percentage}%`,
+                                    ` Total Value: ${formatStrikeLabel(extra.entryValue)}`
+                                ];
+                            }
+                            return ` ${context.raw}%`;
+                        },
+                    },
+                },
                 datalabels: {
                     color: '#aaa',
                     formatter: (_, context) => context.chart.data.labels[context.dataIndex],
@@ -679,6 +768,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                 },
             },
         };
+        
 
         const renderChart = (tradeType) => {
             const typeTrades = tradesByType[tradeType] || [];
@@ -707,12 +797,12 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
 
         return (
             <div style={styles.content}>
-                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', fontSize: 'clamp(12px, 1vw, 14px)', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px', }}>
-                    <div style={{ fontSize: 12 }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 10 }}> Entry Date </div> <span><CustomTooltip content={`Entry: ${entryDate} | Timeframe: ${segmentTime}`}> {entryDate} | {segmentTime} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 12 }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 10 }}> {yLabel} </div> <span><CustomTooltip content={`${yLabel}: ${yValueFormat}`}> {yValueFormat} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 12 }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 10 }}> Total Trades </div> <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 12 }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 10 }}> Total Values </div> <span><CustomTooltip content={`Total values: ${totalValue}`}> {totalValue} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 12 }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 10 }}> BlockTrades </div> <span><CustomTooltip content={`Number of Block Trades in this timeframe: ${blockTradesCount}`}> {blockTradesCount} </CustomTooltip> </span> </div>
+                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc',  display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px', }}>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'  }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Entry Date </div> <span><CustomTooltip content={`Entry: ${entryDate} | Timeframe: ${segmentTime}`}> {entryDate} | {segmentTime} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> {yLabel} </div> <span><CustomTooltip content={`${yLabel}: ${yValueFormat}`}> {yValueFormat} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Trades </div> <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'  }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Total Values </div> <span><CustomTooltip content={`Total values: ${totalValue}`}> {totalValue} </CustomTooltip> </span> </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'  }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> BlockTrades </div> <span><CustomTooltip content={`Number of Block Trades in this timeframe: ${blockTradesCount}`}> {blockTradesCount} </CustomTooltip> </span> </div>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <div style={styles.grid}>

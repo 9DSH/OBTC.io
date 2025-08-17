@@ -192,7 +192,7 @@ export default function FilterBar({ filters, setFilters, options }) {
   const [sizeAnchor, setSizeAnchor] = useState(null);
   const [entryAnchor, setEntryAnchor] = useState(null);
 
-  const iconButtonSize = 'clamp(1.2rem, 3.5vw, 2.1rem)';
+  const iconButtonSize = 'clamp(1rem, 2vw, 2.1rem)';
 
   return (
     <Box sx={{
@@ -202,7 +202,7 @@ export default function FilterBar({ filters, setFilters, options }) {
       justifyContent: 'center',
       alignItems: 'center',
       margin: '0 auto',
-      mt: 6,
+      mt: 3.5,
       mb: 1,
       padding: '0 clamp(0.5rem, 2vw, 1rem)',
       position: 'relative',
@@ -458,7 +458,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                   textOverflow: 'ellipsis',
                 },
                 height: 'clamp(28px, 3.5vw, 32px)',
-                minWidth: 'clamp(30px, 5vw, 140px)',
+                minWidth: 'clamp(100px, 5vw, 140px)',
               }}
             >
               {(options.strikePrices || []).map((p) => (
@@ -496,7 +496,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                   textOverflow: 'ellipsis',
                 },
                 height: 'clamp(28px, 3.5vw, 32px)',
-                minWidth: 'clamp(30px, 5vw, 140px)',
+               minWidth: 'clamp(100px, 5vw, 140px)',
               }}
             >
               {(options.expirationDates || []).map((d) => (
@@ -517,7 +517,7 @@ export default function FilterBar({ filters, setFilters, options }) {
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
-            gap: 1.2,
+            gap: 1,
           }}
         >
           <Tooltip
@@ -552,7 +552,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                 border: '1px dotted rgba(91, 83, 83, 0.7)',
               }}
             >
-              <RestartAltIcon sx={{ color: '#fff', fontSize: '1.2rem' }} />
+              <RestartAltIcon sx={{ color: '#fff', fontSize: 'clamp(1rem, 1vw, 2rem)' }} />
             </IconButton>
           </Tooltip>
 
@@ -588,7 +588,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                 border: '1px dotted rgba(91, 83, 83, 0.7)',
               }}
             >
-              <DoneIcon sx={{ color: '#fff', fontSize: '1.2rem' }} />
+              <DoneIcon sx={{ color: '#fff', fontSize: 'clamp(1rem, 1vw, 2rem)' }} />
             </IconButton>
           </Tooltip>
         </Box>

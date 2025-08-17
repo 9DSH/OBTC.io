@@ -4,6 +4,8 @@
 # testing
 /coverage
 
+# databases
+deribit_data.db
 
 # misc
 .DS_Store

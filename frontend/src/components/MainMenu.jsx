@@ -69,11 +69,7 @@ export default function MainMenu({ loading }) {
                     objectFit: 'contain'}}
           />
           
-    <div style={{marginLeft: 20,fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
-      
-    }}> 
-    v1.0.0
-     </div>
+
         </div>
       {/* Market Watch */}
       <NavLink

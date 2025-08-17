@@ -36,16 +36,16 @@ export default function TechnicalBar({ analytics, loading, btcpriceData, priceLo
 
   const barContainerStyle = {
       position: 'absolute',
-      top: isDataReady ? 0 :'30px' ,
+      top: isDataReady ? "2px" :'30px' ,
       left: '50%',
-      width: '60%',
+      width: '65%',
       transform: 'translateX(-50%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: isDataReady ?'space-between':  'center' ,
-      maxWidth: '1200px',
+      maxWidth: 'clamp(700px,60vw, 1200px)',
       minWidth : '700px',
-      height: isDataReady ? '80px' :'30px' ,
+      height: isDataReady ? 'clamp(50px, 4vh, 80px)' :'30px' ,
       padding: '0 25px',
       zIndex: 1100,
       color: '#fff',
@@ -53,7 +53,6 @@ export default function TechnicalBar({ analytics, loading, btcpriceData, priceLo
       backgroundColor: isDataReady
         ? 'transparent'
         : 'rgba(49, 49, 49, 0.18)', // or 'transparent' 
-      backdropFilter: 'blur(10px)',
       borderRadius: isDataReady ? '10px' : '10px',
       ...(isDataReady ? {} : fadeAnimation), // fade animation when loading
     };
@@ -265,7 +264,7 @@ export default function TechnicalBar({ analytics, loading, btcpriceData, priceLo
           }
           .support-label, .resistance-label {
             position: absolute;
-            top: -20px;
+            top: -15px;
             left: -13px;
             font-size: 10px;
             color: rgb(215, 215, 7);
@@ -287,7 +286,7 @@ export default function TechnicalBar({ analytics, loading, btcpriceData, priceLo
           }
           .support-label-daily, .resistance-label-daily {
             position: absolute;
-            top: -20px;
+            top: -15px;
             left: -13px;
             font-size: 10px;
             color: #f54b4b;
@@ -331,7 +330,7 @@ export default function TechnicalBar({ analytics, loading, btcpriceData, priceLo
           }
           .resistance-title {
             position: absolute;
-            right: -6rem;
+            right: -7rem;
             top: -10%;
             font-size: 11px;
             color: #aaa;

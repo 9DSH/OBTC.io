@@ -12,8 +12,8 @@ const COLORS = {
   "Buy Put": "green",
 };
 
-const MAX_BAR_HEIGHT = 310;
-const MAX_WIDTH = 1000;
+const MAX_BAR_HEIGHT = 300;
+const MAX_WIDTH = 900;
 // const BAR_WIDTH = 7; // Removed fixed width
 // const GAP_BETWEEN_BARS = 10; // Removed fixed gap
 const Y_AXIS_WIDTH = 30; // width reserved for Y axis labels

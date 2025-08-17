@@ -7,34 +7,30 @@ const TabsBar = ({ activeTab, setActiveTab, tabNames }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 'clamp(8px, 2vw, 16px)',
+        marginBottom: 'clamp(5px, 2vw, 6px)',
         width: '100%',
-        // Changed to allow overflow on the parent, handled by the child
-        overflowX: 'hidden', 
-        // Ensure the outer container has a minimum height
-        minHeight: '40px', 
+        overflowX: 'hidden',
+        minHeight: '36px',
+        maxHeight: 'clamp(36px, 5vh, 44px)',
         height: 'fit-content',
       }}
     >
       <div
         style={{
           display: 'flex',
-          // Prevent wrapping and enable horizontal scroll
           flexWrap: 'nowrap',
           overflowX: 'auto',
           justifyContent: 'center',
           alignItems: 'center',
-          gap: 'clamp(0.4rem, 1.5vw, 0.6rem)',
-          padding: 'clamp(0.1rem, 0.4vw, 0.2rem) clamp(0.3rem, 0.4vw, 0.4rem)',
+          gap: '0.4rem', // smaller gap
+          padding: '0.25rem 0.4rem', // reduced container padding
           boxSizing: 'border-box',
-          // Set a static width for consistency on large screens,
-          minWidth: 'clamp(250px, 80vw, 300px)',
-          maxWidth: 'clamp(300px, 90vw, 1200px)',
+          maxWidth: 'clamp(340px, 10vw, 420px)', // narrower container
           background: 'var(--color-hover-trans)',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
-          borderRadius: '10px',
-          boxShadow: '0 0 clamp(10px, 2vw, 15px) rgba(0,0,0,0.3)',
+          borderRadius: '999px',
+          boxShadow: '0 0 10px rgba(0,0,0,0.25)',
           transition: 'all 0.3s ease-in-out',
           MsOverflowStyle: 'none',
           scrollbarWidth: 'none',
@@ -42,37 +38,46 @@ const TabsBar = ({ activeTab, setActiveTab, tabNames }) => {
           position: 'relative',
         }}
       >
-        <style dangerouslySetInnerHTML={{ __html: `
-          ::-webkit-scrollbar {
-            display: none;
-          }
-        ` }} />
-        {tabNames.map(tab => (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              ::-webkit-scrollbar { display: none; }
+            `,
+          }}
+        />
+        {tabNames.map((tab) => (
           <div
             key={tab}
             onClick={() => setActiveTab(tab)}
             style={{
               cursor: 'pointer',
-              // Use flex-shrink: 0 to prevent tabs from shrinking when space is low
               flexShrink: 0,
               minWidth: 'fit-content',
-              padding: 'clamp(0.4rem, 0.7vw, 0.6rem) clamp(1rem, 2vw, 1.5rem)',
-              borderRadius: 'clamp(5px, 1vw, 7px)',
+              padding: '0.3rem 1rem', // narrower pill size
+              borderRadius: '999px',
               fontWeight: 400,
-              fontSize: 'clamp(0.6rem, 1.2vw, 0.85rem)',
-              transition: 'all 0.3s ease',
-              backgroundColor: activeTab === tab ? 'var(--color-primary)' : 'transparent',
+              fontSize: 'clamp(0.6rem, 1vw, 0.8rem)', // smaller font
+              transition: 'all 0.25s ease',
+              backgroundColor:
+                activeTab === tab ? 'var(--color-primary)' : 'transparent',
               color: activeTab === tab ? '#fff' : '#bbb',
-              border: activeTab === tab ? '1px solid rgb(1, 1, 1)' : '1px solid transparent',
+              border:
+                activeTab === tab
+                  ? '1px solid rgba(0,0,0,0.8)'
+                  : '1px solid transparent',
               userSelect: 'none',
               whiteSpace: 'nowrap',
+              letterSpacing: activeTab ===tab ? '0.1rem': 0,
+              boxShadow:
+                activeTab === tab ? '0 2px 6px rgba(0,0,0,0.25)' : 'none',
             }}
-            onMouseEnter={e => {
+            onMouseEnter={(e) => {
               if (activeTab !== tab) {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.backgroundColor =
+                  'rgba(255,255,255,0.06)';
               }
             }}
-            onMouseLeave={e => {
+            onMouseLeave={(e) => {
               if (activeTab !== tab) {
                 e.currentTarget.style.backgroundColor = 'transparent';
               }

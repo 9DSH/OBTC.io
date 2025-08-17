@@ -136,6 +136,14 @@ function handleSegmentSelect(event) {
         overflowX: 'hidden',
       }}
     >
+          <div style={{position: 'absolute',
+                       left:10,
+                       bottom:10,
+                       fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
+    
+    }}> 
+    v1.0.1
+     </div>
       {/* Technical Bar */}
       <TechnicalBar 
         analytics={analytics} 

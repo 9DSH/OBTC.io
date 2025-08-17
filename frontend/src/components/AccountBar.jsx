@@ -11,7 +11,7 @@ export default function AccountBar() {
     top: 10,
     right: 10,
     width: '60px',
-    zIndex: 3900,
+    zIndex: 2000,
     display: 'flex',
     flexDirection: 'column',
     padding: '8px',

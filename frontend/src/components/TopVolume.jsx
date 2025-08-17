@@ -28,24 +28,29 @@ const getColorForValue = (value, min, max) => {
 
   let startHex, endHex;
   let rangeMin, rangeMax;
-
-  if (value >= 15_000_000) { // 10M+
-    startHex = '#de0211'; // red
-    endHex = '#ad1d27';   // dark red
-    rangeMin = 15_000_000;
+  
+  if (value >= 30_000_000) { // 10M+
+    startHex = '#bd1b09'; // red
+    endHex = '#de0211';   // dark red #ad1d27
+    rangeMin = 30_000_000;
     rangeMax = max;
+  } else if (value >= 15_000_000) { // 10M+
+    startHex = '#c24915'; // dark orange
+    endHex = '#cc4a16';   // dark orange
+    rangeMin = 15_000_000;
+    rangeMax = 25_000_000;
   } else if (value >= 10_000_000) { // 5M–9M
-    startHex = '#f74a00'; // orange
-    endHex = '#b33905';   // dark orange
+    startHex = '#b37802'; // orange
+    endHex = '#e3721b';   // dark orange   
     rangeMin = 10_000_000;
     rangeMax = 15_000_000;
   } else if (value >= 5_000_000) { // 5M–9M
-    startHex = '#ffaa00'; // orange
-    endHex = '#cc6d0e';   // dark orange
+    startHex = '#c78904'; // ywllow-orange
+    endHex = '#b38c02';   // dark orange
     rangeMin = 5_000_000;
     rangeMax = 9_000_000;
   } else if (value >= 1_000_000) { // 1M–4M
-    startHex = '#505773'; // green
+    startHex = '#505773'; // darkblue
     endHex = '#cccc00';   // dark yellow
     rangeMin = 1_000_000;
     rangeMax = 4_000_000;
@@ -610,8 +615,7 @@ function HeatmapCore({
           left: 0, top: 0,
           width: scaledYAxisWidth,
           height: canvasHeight,
-          
-           zIndex:2,
+          zIndex:2,
         }}
       >
         {fixedYLabels.map((lbl, i) => {

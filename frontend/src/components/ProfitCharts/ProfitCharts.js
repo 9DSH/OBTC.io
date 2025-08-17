@@ -344,7 +344,7 @@ const ProfitCharts = ({
           overflow: "hidden",
           justifyContent: "center",
           alignItems: 'center',
-          height: positionLabels.length > 1 ? '100%' : '300px',
+          height: positionLabels.length > 1 ? '100%' : 'clamp(300px, 30vh,350px)',
         }}
       >
         {chartMode === "expiration" && selectedDay !== null && profitOverDays[selectedDay] && (
@@ -373,7 +373,7 @@ const ProfitCharts = ({
             }))}
             strikePrices={strikePrices}
             width="100%"
-            height={positionLabels.length > 1 ? "100%" : "230px"}
+            height={positionLabels.length > 1 ? "100%" : "clamp(220px,28vh,300px)"}
             yMin={yMin}
             yMax={yMax}
             xAxisFormat="k"

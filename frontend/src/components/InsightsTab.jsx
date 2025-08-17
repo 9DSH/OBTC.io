@@ -126,7 +126,6 @@ export default function InsightsTab({ data = [], filters, onSegmentSelect }) {
           minHeight: "clamp(300px, 50vh, 400px)",
           width: "100%",
           maxWidth: "clamp(300px, 95vw, 1200px)",
-          margin: "0 auto",
         }}
       >
         {activeSubtab === "putCall" && (

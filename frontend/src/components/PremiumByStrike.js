@@ -12,8 +12,8 @@ const COLORS = {
   "Buy Put": "green",
 };
 
-const MAX_HEIGHT = 300;
-const MAX_WIDTH = 930;
+const MAX_HEIGHT = 290;
+const MAX_WIDTH = 850;
 const GAP_X = 10;
 const Y_AXIS_WIDTH = 40;
 const MAX_LABEL_WIDTH = 80;

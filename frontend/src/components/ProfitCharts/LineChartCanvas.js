@@ -203,7 +203,7 @@ const LineChartCanvas = ({ lines, width = "100%", height = "100%", yMin, yMax, x
               position: "absolute", // Position the tooltip relative to the viewport
               // Calculate tooltip position based on the canvas's position on the page
               left: `${tooltip.x + wrapperRef.current.getBoundingClientRect().left + 10}px`,
-              top: `${tooltip.y + wrapperRef.current.getBoundingClientRect().top - 30}px`,
+              top: `${tooltip.y + wrapperRef.current.getBoundingClientRect().top - 20}px`,
               display: "flex",
               flexDirection: "column",
               gap: 0,
@@ -225,7 +225,7 @@ const LineChartCanvas = ({ lines, width = "100%", height = "100%", yMin, yMax, x
               <div
                 style={{
                   color: "#fff",
-                  fontSize: 'clamp(0.4rem,1.2vw,0.8rem)',
+                  fontSize: 'clamp(0.4rem,1vw,0.8rem)',
                   fontWeight: 600,
                   fontFamily: "Montserrat, sans-serif",
                   whiteSpace: "nowrap",
@@ -236,7 +236,7 @@ const LineChartCanvas = ({ lines, width = "100%", height = "100%", yMin, yMax, x
               <div
                 style={{
                   color: "#ccc",
-                  fontSize: 'clamp(0.4rem,1.2vw,0.8rem)',
+                  fontSize: 'clamp(0.4rem,1vw,0.8rem)',
                   fontFamily: "Roboto, sans-serif",
                   whiteSpace: "nowrap",
                 }}
@@ -246,7 +246,7 @@ const LineChartCanvas = ({ lines, width = "100%", height = "100%", yMin, yMax, x
               <div
                 style={{
                   color: "#ccc",
-                  fontSize: 'clamp(0.4rem,1.2vw,0.8rem)',
+                  fontSize: 'clamp(0.4rem,1vw,0.8rem)',
                   fontFamily: "Roboto, sans-serif",
                   whiteSpace: "nowrap",
                 }}
@@ -256,7 +256,7 @@ const LineChartCanvas = ({ lines, width = "100%", height = "100%", yMin, yMax, x
               <div
                 style={{
                   color: "#ccc",
-                  fontSize: 'clamp(0.4rem,1.2vw,0.8rem)',
+                  fontSize: 'clamp(0.4rem,1vw,0.8rem)',
                   fontFamily: "Roboto, sans-serif",
                   whiteSpace: "nowrap",
                 }}
