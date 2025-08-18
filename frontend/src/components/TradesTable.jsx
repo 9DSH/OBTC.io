@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTable, useSortBy } from 'react-table';
+import { formatStrikeLabel} from "../utils/chartHelpers";
+
 import dayjs from 'dayjs';
 
 const numericColumns = [
@@ -229,10 +231,84 @@ export default function TradesTable({ data = [], filters }) {
     useSortBy
   );
 
-  const visible = rows.slice(0, 10);
+  const visible = rows.slice(0, 9);
+
+  const totalTrades = filteredData.length;
+  const totalEntryValue = filteredData.reduce(
+    (sum, trade) => sum + (parseFloat(trade.Entry_Value) || 0),
+    0
+  );
 
   return (
     <div >
+  {/* ----------------- Metrics Row ----------------- */}
+        <div
+        style={{
+          borderRadius: 8,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
+          marginTop: '0.5rem',
+        }}
+      >
+
+        <div style={{
+                width: "100px",
+                alignItems: "center",
+                justifyContent: "center",
+                display: "flex",
+                flexDirection: "column",
+                textAlign: "center",
+                borderRight: '1px solid #333'
+              }}>
+          <div style={{
+                    whiteSpace: "pre-line",
+                    fontWeight: 400,
+                    fontSize: "clamp(0.6rem, 1vw, 0.8rem)",
+                    color: "white",
+                    fontFamily: "'Roboto', sans-serif",
+                    letterSpacing: '0.1rem'
+                  }}>
+            { formatStrikeLabel(totalTrades)}
+            <div style={{
+                        fontWeight: 400,
+                        fontSize: "clamp(0.5rem, 0.9vw, 0.6rem)",
+                        color: "gray",
+                        fontFamily: "'Roboto', sans-serif",
+                      }}>
+                        Trades</div>
+          </div>
+        </div>
+
+        <div style={{
+                  width: "100px",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  textAlign: "center",
+                }}>
+          <div style={{
+                    whiteSpace: "pre-line",
+                    fontWeight: 400,
+                    fontSize: "clamp(0.6rem, 1vw, 0.8rem)",
+                    color: "white",
+                    fontFamily: "'Roboto', sans-serif",
+                    
+                    letterSpacing: '0.1rem'
+                  }}>
+            { formatStrikeLabel(totalEntryValue)}
+            <div style={{
+                  fontWeight: 400,
+                  fontSize: "clamp(0.5rem, 0.9vw, 0.6rem)",
+                  color: "gray",
+                  fontFamily: "'Roboto', sans-serif",
+                }}>
+                  Entry Value</div>
+          </div>
+        </div>
+      </div>
       <div
         style={{
           overflowX: 'auto',
@@ -240,7 +316,7 @@ export default function TradesTable({ data = [], filters }) {
           alignItems: 'center',
           textAlign: 'center',
           padding: '0 0.5rem',
-          marginTop: '0.5rem',
+          marginTop: '0.8rem',
         }}
       >
         <table

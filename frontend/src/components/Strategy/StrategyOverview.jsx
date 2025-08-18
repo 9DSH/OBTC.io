@@ -1,11 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Bar, Pie } from "react-chartjs-2";
 import {
-  formatNumberKM,
   formatStrategyDisplay,
   groupStrategies,
 } from "./utils/strategiesUtils";
-import { formatExpirationLabel , generateCustomGradientColors} from "../../utils/chartHelpers";
+import { formatStrikeLabel, formatExpirationLabel, generateCustomGradientColors } from "../../utils/chartHelpers";
 import {
   Tooltip as ChartTooltip,
   Chart as ChartJS,
@@ -30,32 +29,14 @@ ChartTooltip.positioners.customPosition = function(elements, eventPosition) {
   };
 };
 
-export default function StrategyOverview({ strategies, onSegmentSelect }) {
+export default function StrategyOverview({ strategies, filters, onSegmentSelect }) {
+  const [sortOption, setSortOption] = useState("count");
+
   const analytics = useMemo(() => {
     if (!strategies || strategies.length === 0) {
       console.log("No strategies available, returning null");
       return null;
     }
-
-    // Log invalid groups
-    const invalidGroups = strategies.map((group, index) => ({
-      index,
-      isEmpty: !group || group.length === 0,
-      hasComboID: !!group[0]?.Combo_ID,
-      hasComboTradeID: !!group[0]?.ComboTrade_IDs,
-    })).filter(g => g.isEmpty || (!g.hasComboID && !g.hasComboTradeID));
-    console.log("Invalid groups:", invalidGroups);
-
-    invalidGroups.forEach(({ index }) => {
-      console.log(`Invalid group ${index} details:`, {
-        firstTrade: strategies[index]?.[0],
-        tradeCount: strategies[index]?.length,
-        strikes: strategies[index] ? [...new Set(strategies[index].map(t => t.Strike_Price))].sort((a, b) => a - b) : [],
-        optionTypes: strategies[index] ? [...new Set(strategies[index].map(t => t.Option_Type?.toLowerCase()))] : [],
-        sides: strategies[index] ? [...new Set(strategies[index].map(t => t.Side))] : [],
-        expirations: strategies[index] ? [...new Set(strategies[index].map(t => t.Expiration_Date))] : [],
-      });
-    });
 
     const validStrategies = strategies.filter((group, index) => {
       if (!group || group.length === 0) {
@@ -78,8 +59,8 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
       return sum + entryValue;
     }, 0);
 
-    const totalVolumeBTC = formatNumberKM(rawVolumeBTC);
-    const totalEntryValue = formatNumberKM(rawEntryValue);
+    const totalVolumeBTC = formatStrikeLabel(rawVolumeBTC);
+    const totalEntryValue = formatStrikeLabel(rawEntryValue);
 
     // Helper function to get strategy type from Combo_ID or fallback
     const getStrategyType = (comboID) => {
@@ -111,13 +92,14 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
 
     // Group strategies by strategy type for bar chart
     const strategyTypeGroups = validStrategies.reduce((acc, group, index) => {
-      const comboID = group[0]?.Combo_ID || group[0]?.ComboTrade_IDs || `Unknown-${index}`;
+      const comboID = group[0]?.Combo_ID || group[0]?.ComboTrade_IDs || `Custom-${index}`;
       const strategyType = getStrategyType(comboID);
       if (!acc[strategyType]) {
-        acc[strategyType] = { count: 0, groups: [], expirations: {} };
+        acc[strategyType] = { count: 0, groups: [], expirations: {}, totalEntryValue: 0 };
       }
       acc[strategyType].count += group.length;
       acc[strategyType].groups.push(group);
+      acc[strategyType].totalEntryValue += group.reduce((sum, trade) => sum + (trade.Entry_Value || 0), 0);
       const groupExpirations = [...new Set(group.map(t => t.Expiration_Date).filter(Boolean))];
       groupExpirations.forEach(exp => {
         acc[strategyType].expirations[exp] = (acc[strategyType].expirations[exp] || 0) + 1;
@@ -125,10 +107,11 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
       return acc;
     }, {});
 
-    const strategyFrequencies = Object.entries(strategyTypeGroups).map(([strategyType, { count, groups, expirations }]) => ({
+    const strategyFrequencies = Object.entries(strategyTypeGroups).map(([strategyType, { count, groups, expirations, totalEntryValue }]) => ({
       name: strategyType,
       count,
       groups,
+      totalEntryValue,
       topExpirations: Object.entries(expirations)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 2)
@@ -137,7 +120,7 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
     console.log("Strategy frequencies:", strategyFrequencies);
 
     const topStrategies = strategyFrequencies
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => sortOption === "count" ? b.count - a.count : b.totalEntryValue - a.totalEntryValue)
       .slice(0, 7);
     console.log("Top strategies:", topStrategies);
 
@@ -153,8 +136,8 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
       labels: formattedLabels,
       datasets: [
         {
-          label: "Occurrences",
-          data: topStrategies.map(s => s.count),
+          label: sortOption === "count" ? "Occurrences" : "Total Entry Value",
+          data: topStrategies.map(s => sortOption === "count" ? s.count : s.totalEntryValue),
           backgroundColor: "#41486d",
           barThickness: 26,
           borderRadius: 7,
@@ -184,34 +167,35 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
 
     const [StrategyName, strikesType, expiry] = formatStrategyDisplay(rawMostTradedStrategy, mostActiveGroup);
 
-
     // Pie chart data
     const strikeData = allTrades.reduce((acc, trade) => {
       const strike = trade.Strike_Price || "Unknown";
       if (!acc[strike]) {
-        acc[strike] = { totalSize: 0, count: 0, trades: [] };
+        acc[strike] = { totalSize: 0, count: 0, trades: [], totalEntryValue: 0 };
       }
       acc[strike].totalSize += trade.Size || 0;
       acc[strike].count += 1;
       acc[strike].trades.push(trade);
+      acc[strike].totalEntryValue += trade.Entry_Value || 0;
       return acc;
     }, {});
 
     const totalSizeSum = Object.values(strikeData).reduce((sum, { totalSize }) => sum + totalSize, 0);
-    const sortedStrikes = Object.entries(strikeData).sort((a, b) => b[1].totalSize - a[1].totalSize);
+    const sortedStrikes = Object.entries(strikeData).sort((a, b) => 
+      sortOption === "count" ? b[1].count - a[1].count : b[1].totalEntryValue - a[1].totalEntryValue
+    );
     const pieLabels = sortedStrikes.map(([label]) => label);
-    const pieDataValues = sortedStrikes.map(([, data]) => data.totalSize);
+    const pieDataValues = sortedStrikes.map(([, data]) => sortOption === "count" ? data.count : data.totalEntryValue);
     const pieCounts = sortedStrikes.map(([, data]) => data.count);
     const piePercentages = sortedStrikes.map(([, data]) => 
       totalSizeSum > 0 ? ((data.totalSize / totalSizeSum) * 100).toFixed(1) : '0.0'
     );
     const pieHoverText = sortedStrikes.map(([label, data]) => [
-      `Total Size: ${formatNumberKM(data.totalSize)} BTC`,
-      `Count: ${formatNumberKM(data.count)} Strategies`
+      `Total Value: ${formatStrikeLabel(data.totalEntryValue)}`,
+      `Count: ${formatStrikeLabel(data.count)} Strategies`
     ]);
 
-    const colors = generateCustomGradientColors( '#283254','#868dba', pieDataValues);
-
+    const colors = generateCustomGradientColors('#283254', '#868dba', pieDataValues);
 
     const pieData = {
       labels: pieLabels,
@@ -242,7 +226,7 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
       validStrategies,
       allTrades,
     };
-  }, [strategies]);
+  }, [strategies, sortOption]);
 
   if (!analytics) {
     console.log("No analytics data, rendering empty state");
@@ -270,26 +254,18 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
 
   const barOptions = {
     indexAxis: "y",
-    layout: {
-      padding: {
-        left: 20, // Space for y-axis labels
-        right: 40, // Space for data labels
-        top: 10,
-        bottom: 10,
-      },
-    },
+    layout: { padding: { left: 20, right: 40, top: 10, bottom: 10 } },
     plugins: {
       datalabels: {
-        color: 'rgb(144, 144, 144)',
-        font: {
-          family: "'Roboto', sans-serif",
-          size: 10,
-          weight: 'bold',
-        },
+        color: "rgb(144, 144, 144)",
+        font: { family: "'Roboto', sans-serif", size: 10, weight: 'bold' },
         anchor: 'end',
         align: 'end',
-        offset: 5, // Slight offset to prevent right-edge clipping
-        clip: false, // Allow labels to render outside chart area
+        offset: 5,
+        clip: false,
+        formatter: (value) => {
+          return typeof value === "number" ? formatStrikeLabel(value) : value;
+        },
       },
       legend: { display: false },
       tooltip: { enabled: false },
@@ -299,28 +275,21 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
         beginAtZero: true,
         ticks: {
           color: 'rgb(144, 144, 144)',
-          font: {
-            family: "'Roboto', sans-serif",
-            size: 10,
+          font: { family: "'Roboto', sans-serif", size: 10 },
+          callback: (val) => {
+            return typeof val === "number" ? formatStrikeLabel(val) : val;
           },
         },
-        grid: {
-          display: false, // Hide x-axis grid lines for cleaner look
-        },
+        grid: { display: false },
       },
       y: {
-        offset: true, // Add space between bars and labels
+        offset: true,
         ticks: {
           color: 'rgb(144, 144, 144)',
-          font: {
-            size: 10,
-            family: "'Roboto', sans-serif",
-          },
-          padding: 10, // Space between labels and bars
+          font: { size: 10, family: "'Roboto', sans-serif" },
+          padding: 10,
         },
-        grid: {
-          display: false, // Hide y-axis grid lines
-        },
+        grid: { display: false },
       },
     },
     maintainAspectRatio: false,
@@ -380,7 +349,7 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
         },
         callbacks: {
           title: function(context) {
-            return `Strike Price: ${formatNumberKM(context[0].label)}`;
+            return `Strike Price: ${formatStrikeLabel(context[0].label)}`;
           },
           label: function(context) {
             return analytics.pieHoverText[context.dataIndex];
@@ -389,10 +358,18 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
       },
       datalabels: {
         color: '#aaa',
-        formatter: (value, context) => [
-          formatNumberKM(context.chart.data.labels[context.dataIndex]),
-          `${formatNumberKM(analytics.pieCounts[context.dataIndex])} (${analytics.piePercentages[context.dataIndex]}%)`
-        ],
+        formatter: (value, context) => {
+          const label = formatStrikeLabel(context.chart.data.labels[context.dataIndex]);
+          const count = analytics.pieCounts[context.dataIndex];
+          const percentage = analytics.piePercentages[context.dataIndex];
+          const totalEntryValue = formatStrikeLabel(analytics.strikeData[context.chart.data.labels[context.dataIndex]].totalEntryValue);
+          
+          if (sortOption === "count") {
+            return [label, `${formatStrikeLabel(count)} (${percentage}%)`];
+          } else {
+            return [label, `${totalEntryValue} (${percentage}%)`];
+          }
+        },
         font: {
           family: "'Roboto', sans-serif",
           size: 9.5,
@@ -412,7 +389,6 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
       },
     },
     onClick: (event, elements) => {
-
       if (elements.length > 0) {
         const index = elements[0].index;
         const strike = analytics.pieData.labels[index];
@@ -452,54 +428,120 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
     >
       <div
         style={{
-          borderRadius: 8,
-          display: "flex",
-          justifyContent: "center",
+          display: "grid",
+          gridTemplateColumns: "20% 56% 25%",
           alignItems: "center",
-          textAlign: "center",
+          width: "100%",
           gap: "1rem",
         }}
       >
-        <button
+        {/* Left Column sort button */}
+        <div
           style={{
-            ...Styles.mainMetric,
-            cursor: 'pointer',
-            background: 'none',
-            border: 'none',
-            padding: 5,
-            borderRadius: 10,
-            transition: 'background-color 0.2s ease',
+            display: "flex",
+            justifyContent: "flex-end",
           }}
-          onClick={handleTotalStrategiesClick}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-          title="View all strategies"
-        >
-          <div style={Styles.metricValue}>
-            {analytics.totalStrategies}
-            <div style={Styles.metricTitle}>Strategies</div>
+        > 
+          <div style={{
+            display: "flex",
+            color: "#666",
+            fontFamily: "'Roboto', sans-serif",
+            fontSize: "clamp(0.6rem, 0.9vw, 0.7rem)",
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: "0.6rem"
+          }}>
+            Sort by
           </div>
-        </button>
+          <button
+            onClick={() => setSortOption(sortOption === "count" ? "totalEntryValue" : "count")}
+            style={{
+              backgroundColor: "#1b1c22",
+              color: "white",
+              border: "1px solid #41486d",
+              borderRadius: "6px",
+              padding: "6px 12px",
+              fontFamily: "'Roboto', sans-serif",
+              fontSize: "clamp(0.6rem, 1vw, 0.8rem)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "background-color 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "#2a2b33";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "#1b1c22";
+            }}
+          >
+            {sortOption === "count" ? "Distribution" : "Total Value"}
+          </button>
+        </div>
 
-        <div style={Styles.mainMetric}>
-          <div style={Styles.metricValue}>
-            {analytics.totalVolumeBTC}
-            <div style={Styles.metricTitle}>Volume (BTC)</div>
+        {/* Middle Column (Main Content) */}
+        <div
+          style={{
+            borderRadius: 8,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            textAlign: "center",
+            gap: "1rem",
+          }}
+        >
+          <button
+            style={{
+              ...Styles.mainMetric,
+              cursor: "pointer",
+              background: "none",
+              border: "none",
+              padding: 5,
+              borderRadius: 10,
+              transition: "background-color 0.2s ease",
+            }}
+            onClick={handleTotalStrategiesClick}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
+            title="View all strategies"
+          >
+            <div style={Styles.metricValue}>
+              {analytics.totalStrategies}
+              <div style={Styles.metricTitle}>Strategies</div>
+            </div>
+          </button>
+
+          <div style={Styles.mainMetric}>
+            <div style={Styles.metricValue}>
+              {analytics.totalVolumeBTC}
+              <div style={Styles.metricTitle}>Volume (BTC)</div>
+            </div>
+          </div>
+
+          <div style={Styles.mainMetric}>
+            <div style={Styles.metricValue}>
+              {analytics.totalEntryValue}
+              <div style={Styles.metricTitle}>Premium</div>
+            </div>
           </div>
         </div>
 
-        <div style={Styles.mainMetric}>
-          <div style={Styles.metricValue}>
-            {analytics.totalEntryValue}
-            <div style={Styles.metricTitle}>Premium</div>
-          </div>
+        {/* Right Column */}
+        <div
+          style={{
+            textAlign: "center",
+            color: "#ccc",
+            fontWeight: "bold",
+          }}
+        >
         </div>
       </div>
-       {/* main charts container */}
+
       <div
         style={{
           display: "grid",
@@ -507,16 +549,14 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
           flexGrow: 1,
           minHeight: 0,
           width: "100%",
-          
         }}
       >
-         {/* Bar chart container */}
         <div
           style={{
             borderRadius: 8,
             minHeight: 250,
             display: "flex",
-            padding: 'clamp(10px, 1.6vw, 12px)', // Uniform padding
+            padding: 'clamp(10px, 1.6vw, 12px)',
             flexDirection: "column",
             boxSizing: "border-box",
           }}
@@ -525,7 +565,6 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
             <Bar data={analytics.barData} options={barOptions} />
           </div>
         </div>
-        {/* Pie chart container */}
         <div
           style={{
             borderRadius: 8,
@@ -539,7 +578,7 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
             boxSizing: "border-box",
           }}
         >
-          <div style={{ flexGrow: 1 , maxHeight: 'clamp(280px, 10vw, 320px)' }}>
+          <div style={{ flexGrow: 1, maxHeight: 'clamp(280px, 10vw, 320px)' }}>
             <Pie data={analytics.pieData} options={pieOptions} />
           </div>
         </div>
@@ -547,7 +586,6 @@ export default function StrategyOverview({ strategies, onSegmentSelect }) {
     </div>
   );
 }
-
 
 const Styles = {
   mainMetric: {

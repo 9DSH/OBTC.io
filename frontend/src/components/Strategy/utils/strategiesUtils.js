@@ -10,38 +10,145 @@ export function formatNumberKM(value) {
 }
 
 
-export function filterStrategies(trades) {
-    const strategyGroups = {};
-  
-    for (const trade of trades) {
-      let groupKey;
-      if (trade.ComboTrade_IDs && trade.ComboTrade_IDs !== "null") {
-        groupKey = `combo:${trade.ComboTrade_IDs}`;
-      } else if (
-        trade.Combo_ID && trade.Combo_ID !== "null" &&
-        trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null"
-      ) {
-        groupKey = `combo_id:${trade.Combo_ID}:block:${trade.BlockTrade_IDs}`;
-      } else if (trade.Combo_ID && trade.Combo_ID !== "null") {
-        groupKey = `combo_id:${trade.Combo_ID}`;
-      } else if (trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null") {
-        groupKey = `block:${trade.BlockTrade_IDs}`;
-      } else {
-        continue; // skip single trades
-      }
-  
-      if (!strategyGroups[groupKey]) {
-        strategyGroups[groupKey] = [];
-      }
-      strategyGroups[groupKey].push(trade);
+export function filterStrategies(trades, filters = {}) {
+  const strategyGroups = {};
+
+  // Group trades
+  for (const trade of trades) {
+    let groupKey;
+    if (trade.ComboTrade_IDs && trade.ComboTrade_IDs !== "null") {
+      groupKey = `combo:${trade.ComboTrade_IDs}`;
+    } else if (
+      trade.Combo_ID && trade.Combo_ID !== "null" &&
+      trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null"
+    ) {
+      groupKey = `combo_id:${trade.Combo_ID}:block:${trade.BlockTrade_IDs}`;
+    } else if (trade.Combo_ID && trade.Combo_ID !== "null") {
+      groupKey = `combo_id:${trade.Combo_ID}`;
+    } else if (trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null") {
+      groupKey = `block:${trade.BlockTrade_IDs}`;
+    } else {
+      continue; // skip single trades
     }
-  
-    // Return only groups with more than one trade
-    return Object.values(strategyGroups).filter(group => group.length > 1);
+
+    if (!strategyGroups[groupKey]) {
+      strategyGroups[groupKey] = [];
+    }
+    strategyGroups[groupKey].push(trade);
   }
 
+  console.log("filterStrategies: Built strategyGroups:", Object.keys(strategyGroups).length);
+
+  // Apply filters: keep group if ANY trade matches filters
+  const filteredGroups = Object.values(strategyGroups).filter(group => {
+    const groupMatch = group.some(trade => {
+      return Object.entries(filters).every(([key, value]) => {
+        if (!value || (Array.isArray(value) && value.length === 0)) return true;
+
+        let result = true;
+
+        switch (key) {
+          case "Expiration_Date": {
+            result = String(trade.Expiration_Date) === String(value);
+            console.log(`[Filter] Expiration_Date`, { trade: trade.Expiration_Date, filter: value, result });
+            break;
+          }
+
+          case "Strike_Price": {
+            const strike = Number(trade.Strike_Price);
+            result = Array.isArray(value)
+              ? value.map(Number).includes(strike)
+              : strike === Number(value);
+            console.log(`[Filter] Strike_Price`, { trade: strike, filter: value, result });
+            break;
+          }
+
+          case "Entry_Value": {
+            const val = Number(trade.Entry_Value);
+            if (Array.isArray(value)) {
+              const [min, max] = value.map(Number);
+              result = !isNaN(val) && val >= min && val <= max;
+              console.log(`[Filter] Entry_Value (range)`, { trade: val, min, max, result });
+            } else {
+              result = val === Number(value);
+              console.log(`[Filter] Entry_Value (exact)`, { trade: val, filter: value, result });
+            }
+            break;
+          }
+
+          case "Size": {
+            const sizeVal = Number(trade.Size);
+            if (Array.isArray(value)) {
+              const [min, max] = value.map(Number);
+              result = !isNaN(sizeVal) && sizeVal >= min && sizeVal <= max;
+              console.log(`[Filter] Size (range)`, { trade: sizeVal, min, max, result });
+            } else {
+              result = sizeVal === Number(value);
+              console.log(`[Filter] Size (exact)`, { trade: sizeVal, filter: value, result });
+            }
+            break;
+          }
+
+          case "Entry_Date": {
+            const tradeDate = trade.Entry_Date ? new Date(trade.Entry_Date) : null;
+            const start = value.start ? new Date(value.start) : null;
+            const end = value.end ? new Date(value.end) : null;
+            result =
+              tradeDate &&
+              (!start || tradeDate >= start) &&
+              (!end || tradeDate <= end);
+            console.log(`[Filter] Entry_Date`, {
+              trade: trade.Entry_Date,
+              start: value.start,
+              end: value.end,
+              result,
+            });
+            break;
+          }
+
+          case "Side": {
+            result = Array.isArray(value)
+              ? value.includes(trade.Side)
+              : String(trade.Side) === String(value);
+            console.log(`[Filter] Side`, { trade: trade.Side, filter: value, result });
+            break;
+          }
+
+          case "Option_Type": {
+            result = Array.isArray(value)
+              ? value.includes(trade.Option_Type)
+              : String(trade.Option_Type) === String(value);
+            console.log(`[Filter] Option_Type`, { trade: trade.Option_Type, filter: value, result });
+            break;
+          }
+
+          default: {
+            result = Array.isArray(value)
+              ? value.includes(trade[key])
+              : String(trade[key]) === String(value);
+            console.log(`[Filter] Default`, { key, trade: trade[key], filter: value, result });
+          }
+        }
+
+        return result;
+      });
+    });
+
+    if (!groupMatch) {
+      console.log("Group excluded due to filters:", group);
+    }
+
+    return groupMatch;
+  });
+
+  console.log("filterStrategies: Returning groups:", filteredGroups.length);
+
+  // Return only groups with more than one trade
+  return filteredGroups.filter(group => group.length > 1);
+}
+
   
-  export function formatStrategyDisplay(rawName, trades = []) {
+export function formatStrategyDisplay(rawName, trades = []) {
     if (!rawName || typeof rawName !== "string" || rawName.startsWith("Custom-")) {
     if (trades.length >= 2) {
             const strikes = [...new Set(trades.map(t => t.Strike_Price))].sort((a, b) => a - b);

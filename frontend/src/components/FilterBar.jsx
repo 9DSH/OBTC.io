@@ -207,6 +207,7 @@ export default function FilterBar({ filters, setFilters, options }) {
       padding: '0 clamp(0.5rem, 2vw, 1rem)',
       position: 'relative',
     }}>
+
       <Box sx={{
         display: 'flex',
         flexDirection: 'row',

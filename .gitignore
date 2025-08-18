@@ -6,7 +6,8 @@
 
 # databases
 deribit_data.db
-
+technical_analysis_4h.csv
+technical_analysis_daily.csv
 # misc
 .DS_Store
 .env.local

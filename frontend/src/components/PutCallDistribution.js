@@ -86,8 +86,6 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
       });
     });
 
-    console.log('Filtered Data:', result);
-    console.log('Filtered Data Length:', result.length);
     return result;
   }, [data, filters]);
 

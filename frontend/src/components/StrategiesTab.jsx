@@ -11,9 +11,8 @@ export default function StrategiesTab({ data, filters, onSegmentSelect }) {
   const [selectedSegment, setSelectedSegment] = useState(null);
 
   const strategies = useMemo(() => {
-    const filtered = filterStrategies(data);
-    return filtered;
-  }, [data]);
+    return filterStrategies(data, filters);
+  }, [data, filters]);
 
   function handleSegmentSelect(segment) {
     console.log("StrategiesTab: Received segment in handleSegmentSelect:", segment);
@@ -135,6 +134,7 @@ export default function StrategiesTab({ data, filters, onSegmentSelect }) {
                   letterSpacing: "clamp(0.8px, 0.2vw, 1.2px)",
                   userSelect: "none",
                   padding: "clamp(0.2rem, 1vw, 0.5rem) clamp(0.5rem, 2vw, 0.8rem)",
+                  
                 }}
               >
                 {label}
@@ -154,7 +154,7 @@ export default function StrategiesTab({ data, filters, onSegmentSelect }) {
         />
       </nav>
 
-      <div style={{ minHeight: 400 }}>
+      <div style={{ minHeight: 400}}>
         {activeSubtab === "strategyOverview" && (
           <StrategyOverview
             strategies={strategies}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FilterBar, { DEFAULT_FILTERS } from './FilterBar';
+import { formatStrikeLabel } from "../utils/chartHelpers";
+
 import TabsBar from './TabsBar';
 import InsightsTab from './InsightsTab';
 import StrategiesTab from './StrategiesTab';
@@ -29,8 +31,9 @@ export default function TradeDashboard({ trades,
     .sort((a, b) => new Date(a) - new Date(b));
   
   const tabNames = ['Insights','Strategies', 'Data Table'];
+  
 
-   
+
   useEffect(() => {
     console.log("TradeDashboard: State updated - activeTab:", activeTab,
                 "selectedSegment:", selectedSegment,
@@ -136,14 +139,16 @@ function handleSegmentSelect(event) {
         overflowX: 'hidden',
       }}
     >
-          <div style={{position: 'absolute',
+    {/* Version Control */}
+     <div style={{position: 'absolute',
                        left:10,
                        bottom:10,
                        fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
     
-    }}> 
-    v1.0.1
+                   }}> 
+        v1.0.2
      </div>
+
       {/* Technical Bar */}
       <TechnicalBar 
         analytics={analytics} 
