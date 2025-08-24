@@ -7,7 +7,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-import { formatStrikeLabel, formatExpirationLabel, formatDateTimeLabel } from '../utils/chartHelpers';
+import { formatStrikeLabel, formatExpirationLabel, formatDateTimeLabel } from './utils/chartHelpers';
 import {
   groupStrategies,
   filterStrategies,
@@ -23,61 +23,34 @@ const hexToRgb = (hex) => [
   parseInt(hex.slice(5, 7), 16)
 ];
 
+const COLOR_STOPS = [
+  { value: 30_000_000, startHex: '#bd1b09', endHex: '#ff0314', label: '≥ 30M' },
+  { value: 15_000_000, startHex: '#c24915', endHex: '#cc4a16', label: '15M-30M' },
+  { value: 10_000_000, startHex: '#b37802', endHex: '#e3721b', label: '10M-15M' },
+  { value: 5_000_000, startHex: '#ccb702', endHex: '#cf9100', label: '5M-9M' },
+  // Modified startHex and endHex for the 1M-4M range
+  { value: 1_000_000, startHex: '#48616e', endHex: '#b5a412', label: '1M-4M' },
+  { value: 500_000, startHex: '#373c52', endHex: '#484f6e', label: '500K-900K' },
+  { value: 400_000, startHex: '#464d70', endHex: '#343a57', label: '400K-499K' },
+  { value: 0, startHex: '#202433', endHex: '#323854', label: '< 400K' },
+];
+
 const getColorForValue = (value, min, max) => {
   if (typeof value !== 'number' || isNaN(value)) return 'rgb(0,0,0)';
 
-  let startHex, endHex;
-  let rangeMin, rangeMax;
-  
-  if (value >= 30_000_000) { // 10M+
-    startHex = '#bd1b09'; // red
-    endHex = '#de0211';   // dark red #ad1d27
-    rangeMin = 30_000_000;
-    rangeMax = max;
-  } else if (value >= 15_000_000) { // 10M+
-    startHex = '#c24915'; // dark orange
-    endHex = '#cc4a16';   // dark orange
-    rangeMin = 15_000_000;
-    rangeMax = 25_000_000;
-  } else if (value >= 10_000_000) { // 5M–9M
-    startHex = '#b37802'; // orange
-    endHex = '#e3721b';   // dark orange   
-    rangeMin = 10_000_000;
-    rangeMax = 15_000_000;
-  } else if (value >= 5_000_000) { // 5M–9M
-    startHex = '#c78904'; // ywllow-orange
-    endHex = '#b38c02';   // dark orange
-    rangeMin = 5_000_000;
-    rangeMax = 9_000_000;
-  } else if (value >= 1_000_000) { // 1M–4M
-    startHex = '#505773'; // darkblue
-    endHex = '#cccc00';   // dark yellow
-    rangeMin = 1_000_000;
-    rangeMax = 4_000_000;
-  } else if (value >= 500_000) { // 500k–900k
-    startHex = '#373c52'; // green
-    endHex = '#484f6e';   // dark blue
-    rangeMin = 500_000;
-    rangeMax = 900_000;
-  } else if (value >= 400_000) { // 400k–499k
-    startHex = '#464d70'; // purple
-    endHex = '#343a57';   // dark purple
-    rangeMin = 400_000;
-    rangeMax = 499_999;
-  } else { // less than 400k
-    startHex = '#202433'; // very dark 
-    endHex = '#323854';   // dark 
-    rangeMin = min;
-    rangeMax = 399_999;
-  }
+  const stop = COLOR_STOPS.find(s => value >= s.value) || COLOR_STOPS[COLOR_STOPS.length - 1];
+  const nextStop = COLOR_STOPS[COLOR_STOPS.indexOf(stop) - 1];
 
-  const startRGB = hexToRgb(startHex);
-  const endRGB = hexToRgb(endHex);
+  const rangeMin = stop.value;
+  const rangeMax = nextStop ? nextStop.value : max;
+
+  const startRGB = hexToRgb(stop.startHex);
+  const endRGB = hexToRgb(stop.endHex);
+
   const t = Math.max(0, Math.min(1, (value - rangeMin) / (rangeMax - rangeMin)));
   const rgb = lerpColor(startRGB, endRGB, t);
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 };
-
 
 const DAYS_TO_SHOW = 7;
 const Y_AXIS_WIDTH = 70;
@@ -88,13 +61,83 @@ const DEFAULT_SEGMENT_SIZE = 30;
 const DEFAULT_X_SEGMENT_EXP = 30;
 const DEFAULT_X_SEGMENT_STRIKE = 30;
 const MAX_STRIKE_PRICES = 20;
+const LEGEND_WIDTH = 150;
+
+function HeatmapLegend({ minValue, maxValue, height, scale, activeRange, onLegendClick }) {
+  const legendItems = [
+    { label: '≥ 30M', value: 30_000_000 },
+    { label: '15M-30M', value: 15_000_000 },
+    { label: '10M-15M', value: 10_000_000 },
+    { label: '5M-9M', value: 5_000_000 },
+    { label: '1M-4M', value: 1_000_000 },
+    { label: '500K-900K', value: 500_000 },
+    { label: '400K-499K', value: 400_000 },
+    { label: '< 400K', value: 0 },
+  ];
+
+  const getRange = (value) => {
+    const stopIndex = COLOR_STOPS.findIndex(s => s.value === value);
+    const start = COLOR_STOPS[stopIndex].value;
+    const end = stopIndex > 0 ? COLOR_STOPS[stopIndex - 1].value - 1 : Infinity;
+    return { start, end };
+  };
+
+  return (
+    <div style={{
+      width: LEGEND_WIDTH,
+      height,
+      background: 'rgba(43, 42, 42, 0.29)',
+      borderRadius: '10px',
+      padding: '20px 10px 0 30px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      gap: '8px',
+      fontSize: 'clamp(9px,1vw,11px)',
+      color: '#bbb',
+      fontFamily: "'Roboto',sans-serif",
+      marginLeft: '10px',
+    }}>
+      <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>Volume (USD)</div>
+      {legendItems.map((item, index) => {
+        const range = getRange(item.value);
+        const isActive = activeRange && activeRange.start === range.start && activeRange.end === range.end;
+        return (
+          <div
+            key={index}
+            onClick={() => onLegendClick(isActive ? null : range)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              justifyContent: 'flex-start',
+              cursor: 'pointer',
+              opacity: isActive ? 1.2 : 0.6,
+              transition: 'opacity 0.2s ease-in-out',
+            }}
+          >
+            <div style={{
+              width: '12px',
+              height: '12px',
+              backgroundColor: getColorForValue(item.value, minValue, maxValue),
+              marginRight: '8px',
+              borderRadius: '2px',
+            }} />
+            <div>{item.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // MAIN TOPVOLUME WRAPPER:
 export default function TopVolume(props) {
   const [yAxisMode, setYAxisMode] = useState('Expiration Date');
+  const [activeLegendRange, setActiveLegendRange] = useState(null);
   const { data = [] } = props;
 
-  // Find the maximum y rows (expirations) for Expiration Date mode
   const expirationYLabelsCount = useMemo(() => {
     return Array.from(
       new Set(
@@ -107,6 +150,18 @@ export default function TopVolume(props) {
     ).filter(Boolean).length;
   }, [data]);
 
+  const { minValue, maxValue } = useMemo(() => {
+    const allValues = data.map(row => +row.Entry_Value).filter(v => !isNaN(v));
+    return {
+      minValue: allValues.length ? Math.min(...allValues) : 0,
+      maxValue: allValues.length ? Math.max(...allValues) : 0,
+    };
+  }, [data]);
+
+  const handleLegendClick = (range) => {
+    setActiveLegendRange(range);
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -114,53 +169,71 @@ export default function TopVolume(props) {
       justifyContent: 'center',
       width: props.maxWidth ? Math.round(props.maxWidth) : '100%',
       height: props.maxHeight ? Math.round(props.maxHeight) : '100%',
-      minWidth: MIN_WIDTH,
+      minWidth: MIN_WIDTH + LEGEND_WIDTH,
       minHeight: MIN_HEIGHT,
       overflow: 'hidden',
     }}>
-      {/* Sidebar left */}
       <div style={{ display: 'flex', 
-                    flexDirection: 'row', 
-                    background: 'transparent' }}>
-
+                   flexDirection: 'row', 
+                   background: 'transparent', 
+                   width: '100%', 
+                   height: '100%' }}>
+        {/* Dropdown container */}
         <div style={{
-          width: 'clamp(10px, 7vw, 120px)',
-          minWidth: 20,
-          background: 'var(--color-background-bar',
-          borderRadius: "10px 0 0 10px ",
-          display: "flex",
-          flexDirection: "column",  // stack items vertically
-          alignItems: "center",     // horizontal centering
-          justifyContent: "flex-start", // push to top
-          paddingTop: 8,            // optional: space from very top
-        }}>
+                    width: 'clamp(10px, 7vw, 120px)',
+                    minWidth: 20,
+                    background: 'var(--color-background-bar',
+                    borderRadius: "10px 0 0 10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    paddingTop: 8,
+                    flexShrink: 0,
+                  }}>
           <select
             value={yAxisMode}
             onChange={e => setYAxisMode(e.target.value)}
             style={{
-              width: "90%",
-              background: '#2a2a34',
-              color: 'white',
-              border: '1px solid var(--color-background-bar',
-              padding: 6,
-              fontSize: 'clamp(0.4rem, 1vw, 0.6rem)',
-              fontFamily: "'Roboto',sans-serif",
-              borderRadius: 4,
+                    width: "90%",
+                    background: '#2a2a34',
+                    color: 'white',
+                    border: '1px solid var(--color-background-bar',
+                    padding: 6,
+                    fontSize: 'clamp(0.4rem, 1vw, 0.6rem)',
+                    fontFamily: "'Roboto',sans-serif",
+                    borderRadius: 4,
+                    marginBottom: '1rem',
             }}
           >
             <option value="Expiration Date">Expiration Date</option>
-            <option value="Strike Price">Strike Price</option>
+            <option value="Strike Price">BTC Price</option>
           </select>
         </div>
 
-        {yAxisMode === "Strike Price"
-          ? <StrikePriceGrid {...props} expirationYLabelsCount={expirationYLabelsCount} />
-          : <ExpirationGrid {...props} maxYLabels={expirationYLabelsCount} />}
+        {/* Chart container */}
+        <div style={{ flexGrow: 1, 
+                      position: 'relative', 
+                      overflow: 'hidden', 
+                      borderRadius: '0' }}>
+          {yAxisMode === "Strike Price"
+            ? <StrikePriceGrid {...props} expirationYLabelsCount={expirationYLabelsCount} activeLegendRange={activeLegendRange} />
+            : <ExpirationGrid {...props} maxYLabels={expirationYLabelsCount} activeLegendRange={activeLegendRange} />}
+        </div>
+
+        {/* Legend container on the right */}
+        <HeatmapLegend
+          minValue={minValue}
+          maxValue={maxValue}
+          height={props.maxHeight || MIN_HEIGHT}
+          scale={1}
+          activeRange={activeLegendRange}
+          onLegendClick={handleLegendClick}
+        />
       </div>
     </div>
   );
 }
-
 
 // --- MODE 1: Expiration Date ---
 function ExpirationGrid({
@@ -169,7 +242,8 @@ function ExpirationGrid({
   onSegmentSelect,
   maxWidth = null,
   maxHeight = null,
-  maxYLabels = 20, // actual y rows present
+  maxYLabels = 20,
+  activeLegendRange,
 }) {
   return (
     <HeatmapCore
@@ -183,6 +257,7 @@ function ExpirationGrid({
       segmentSizeY={DEFAULT_SEGMENT_SIZE}
       maxStrikePrices={MAX_STRIKE_PRICES}
       targetYLabels={maxYLabels}
+      activeLegendRange={activeLegendRange}
     />
   );
 }
@@ -195,8 +270,8 @@ function StrikePriceGrid({
   maxWidth = null,
   maxHeight = null,
   expirationYLabelsCount,
+  activeLegendRange,
 }) {
-  // Compute rows to display
   const strikeValueMap = {};
   for (const row of data) {
     if (row.Strike_Price != null && !isNaN(row.Strike_Price) && row.Entry_Value != null) {
@@ -211,7 +286,6 @@ function StrikePriceGrid({
     .sort((a, b) => a - b);
   const strikeRows = strikeLabels.length;
 
-  // Compute segmentSizeY so that Strike mode is as tall as Expiration
   const targetSegmentSizeY =
     expirationYLabelsCount && strikeRows
       ? (DEFAULT_SEGMENT_SIZE * expirationYLabelsCount) / strikeRows
@@ -225,10 +299,11 @@ function StrikePriceGrid({
       maxWidth={maxWidth}
       maxHeight={maxHeight}
       mode="Strike Price"
-      segmentSizeX={DEFAULT_X_SEGMENT_STRIKE}  // Make this WIDER than expiration
+      segmentSizeX={DEFAULT_X_SEGMENT_STRIKE}
       segmentSizeY={targetSegmentSizeY}
       maxStrikePrices={MAX_STRIKE_PRICES}
       targetYLabels={expirationYLabelsCount}
+      activeLegendRange={activeLegendRange}
     />
   );
 }
@@ -241,10 +316,11 @@ function HeatmapCore({
   maxWidth = null,
   maxHeight = null,
   mode = "Expiration Date",
-  segmentSizeX = 30,  // Grid column width
-  segmentSizeY = 30,  // Grid row (Y) height
+  segmentSizeX = 30,
+  segmentSizeY = 30,
   maxStrikePrices = 20,
-  targetYLabels = 20, // just for match
+  targetYLabels = 20,
+  activeLegendRange,
 }) {
   const chartRef = useRef(null), chartInstanceRef = useRef(null), wrapperRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ width: maxWidth || 0, height: maxHeight || 0 });
@@ -275,7 +351,6 @@ function HeatmapCore({
     return () => ro.disconnect();
   }, [maxWidth, maxHeight]);
 
-  //-- axis labels
   const { fixedXLabels, fixedYLabels } = useMemo(() => {
     const allDays = Array.from(
       new Set(data.map(row =>
@@ -298,7 +373,6 @@ function HeatmapCore({
         .sort()
         .reverse();
     } else {
-      // Strike Price
       const strikeValueMap = {};
       for (const row of data) {
         if (row.Strike_Price != null && !isNaN(row.Strike_Price) && row.Entry_Value != null) {
@@ -310,12 +384,11 @@ function HeatmapCore({
         .sort(([, vA], [, vB]) => vB - vA)
         .slice(0, maxStrikePrices)
         .map(([strike]) => Number(strike))
-        .sort((a, b) =>  b - a);
+        .sort((a, b) => b - a);
     }
     return { fixedXLabels, fixedYLabels };
   }, [data, mode, maxStrikePrices]);
 
-  // -- filter
   const filteredData = useMemo(() => {
     const result = data.filter((item) => {
       const itemDate = item.Entry_Date ? new Date(item.Entry_Date) : null;
@@ -344,12 +417,12 @@ function HeatmapCore({
     return filtered;
   }, [data]);
 
-  // --- aggregate ---
   const { plotData, groupIndices, minValue, maxValue } = useMemo(() => {
     const agg = {};
     for (const row of filteredData) {
       if (!row.Entry_Date || (mode === 'Expiration Date' && !row.Expiration_Date) ||
         (mode === 'Strike Price' && !row.Strike_Price) || !row.Entry_Value) continue;
+
       const entryDate = new Date(row.Entry_Date);
       const y = mode === 'Expiration Date'
         ? new Date(row.Expiration_Date).toISOString().split('T')[0]
@@ -371,7 +444,6 @@ function HeatmapCore({
     return { plotData, groupIndices, minValue, maxValue };
   }, [filteredData, fixedXLabels, fixedYLabels, data, mode]);
 
-  // --- geometry ---
   const logicalCanvasWidth = fixedXLabels.length * segmentSizeX;
   const logicalCanvasHeight = fixedYLabels.length * segmentSizeY;
   const logicalTotalWidth = Y_AXIS_WIDTH + logicalCanvasWidth;
@@ -410,6 +482,7 @@ function HeatmapCore({
       extraBottomPx: EXTRA_BOTTOM_PX,
     };
   }, [scale, logicalCanvasWidth, logicalCanvasHeight, segmentSizeX, segmentSizeY]);
+
   useEffect(() => {
     const ctx = chartRef.current?.getContext('2d');
     if (!ctx) return;
@@ -456,7 +529,7 @@ function HeatmapCore({
                 if (!items || !items.length) return '';
                 const item = items[0];
                 const pt = item.dataset.data[item.dataIndex]._raw;
-                return `${ formatDateOnlyLabel(pt.day)} ${pt.segment}`;
+                return `${formatDateOnlyLabel(pt.day)} ${pt.segment}`;
               },
               label: (ctx) => {
                 const pt = ctx.dataset.data[ctx.dataIndex]._raw;
@@ -478,9 +551,6 @@ function HeatmapCore({
           if (els.length > 0) {
             const idx = els[0].index;
             const pt = plotData[idx];
-            console.log('Selected segment raw data:', pt); // Log raw segment data
-        
-            // Prepare segmentData in the required format
             const segmentData = {
               day: pt.day,
               segment: pt.segment,
@@ -489,33 +559,16 @@ function HeatmapCore({
               x: pt.x,
               y: pt.y,
             };
-        
-            console.log('Prepared segmentData:', segmentData); // Log segmentData before groupStrategies
-        
-            // Call groupStrategies to get combo and block trade groups
             const { comboGroups, blockTradeGroups } = groupStrategies(pt.trades, totalTradesData);
-        
-            // Add blockTrades and combo to segmentData
             segmentData.blockTrades = blockTradeGroups;
             segmentData.combo = comboGroups;
-        
-            console.log('segmentData with groups:', segmentData); // Log final segmentData with groups
-        
-            // Call onSegmentSelect with the complete payload
             const payload = {
               contextId: 'insight/topvolume',
               selectedSegment: segmentData,
               comboGroups,
               blockTradeGroups,
             };
-        
-            console.log('onSegmentSelect payload:', payload); // Log final payload
-        
             onSegmentSelect?.(payload);
-        
-            console.log('onSegmentSelect called with payload'); // Confirm callback execution
-          } else {
-            console.log('No segment selected (empty els array)');
           }
         },
       },
@@ -531,6 +584,13 @@ function HeatmapCore({
           const yScale = c.scales.y;
           if (!xScale || !yScale) return;
           for (const pt of plotData) {
+            // Apply the legend filter here
+            if (activeLegendRange) {
+                if (+pt.value < activeLegendRange.start || +pt.value > activeLegendRange.end) {
+                    continue;
+                }
+            }
+
             const xi = fixedXLabels.indexOf(pt.x), yi = fixedYLabels.indexOf(pt.y);
             if (xi === -1 || yi === -1) continue;
             let xLeft = xScale.getPixelForValue(xi), xRight = xScale.getPixelForValue(xi + 1);
@@ -585,7 +645,7 @@ function HeatmapCore({
         setYLabelRects(null);
       }
     };
-  }, [fixedXLabels, fixedYLabels, plotData, groupIndices, minValue, maxValue, onSegmentSelect, scaled, mode]);
+  }, [fixedXLabels, fixedYLabels, plotData, groupIndices, minValue, maxValue, onSegmentSelect, scaled, mode, activeLegendRange]);
 
   if (!fixedXLabels.length || !fixedYLabels.length) {
     return <div style={{ color: 'white', padding: 20, textAlign: 'center' }}>No data</div>;
@@ -603,19 +663,17 @@ function HeatmapCore({
         width: wrapperWidth,
         height: wrapperHeight,
         position: 'relative',
-        borderRadius: '  0  10px 10px 0 ',
+        borderRadius: '0 10px 10px 0',
         overflow: 'hidden',
         background: 'rgba(43, 42, 42, 0.29)',
-        
       }}>
-      {/* Y axis (labels) */}
       <div
         style={{
           position: 'absolute',
           left: 0, top: 0,
           width: scaledYAxisWidth,
           height: canvasHeight,
-          zIndex:2,
+          zIndex: 2,
         }}
       >
         {fixedYLabels.map((lbl, i) => {
@@ -644,7 +702,6 @@ function HeatmapCore({
                 overflow: 'hidden',
                 whiteSpace: 'nowrap',
                 textOverflow: 'ellipsis',
-               
               }}
               title={label}
             >
@@ -653,7 +710,6 @@ function HeatmapCore({
           );
         })}
       </div>
-      {/* X axis area */}
       <div
         style={{
           position: 'absolute',
@@ -682,6 +738,7 @@ function HeatmapCore({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                overflow: 'hidden',
               }}
             >
               {lbl.split(' ')[1]}
@@ -717,7 +774,6 @@ function HeatmapCore({
           })}
         </div>
       </div>
-      {/* Canvas (grid) */}
       <canvas
         ref={chartRef}
         style={{

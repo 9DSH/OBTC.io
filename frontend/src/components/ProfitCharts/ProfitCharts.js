@@ -1,8 +1,10 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect} from "react";
+import { IconButton } from "@mui/material";
+import CustomTooltip from "../CustomTooltip";
 import HeatmapChart from "./HeatmapChart";
 import LineChartCanvas from "./LineChartCanvas";
-import { getRoundedStep } from "../../utils/chartHelpers";
-
+import { getRoundedStep} from "../utils/chartHelpers";
+import  DateAxisSlider from "./utils/DateAxisSlider"
 // Debug imports to catch issues
 console.debug("ProfitCharts: Imported HeatmapChart", !!HeatmapChart);
 console.debug("ProfitCharts: Imported LineChartCanvas", !!LineChartCanvas);
@@ -66,6 +68,8 @@ function calculateProfit(currentPrice, optionPrice, strikePrice, optionType, qua
   return isNaN(profit) ? 0 : profit * quantity;
 }
 
+
+
 const ProfitCharts = ({
   selectedTrades,
   initialMode = "all",
@@ -75,19 +79,6 @@ const ProfitCharts = ({
 }) => {
   const [chartMode, setChartMode] = useState(initialMode);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const {
     indexPriceRange,
@@ -283,7 +274,6 @@ const ProfitCharts = ({
     });
 
     // Time passed - assuming starting from day 0 as current
-    const timePassed = 0; // Since day 0 is current, time passed is 0 days
     const currentDayIndex = 0; // Current is day 0
 
     return {
@@ -314,13 +304,8 @@ const ProfitCharts = ({
     return <div>Error: Chart components failed to load</div>;
   }
 
-  const toggleDropdown = () => {
-    setIsDropdownOpen(!isDropdownOpen);
-  };
-
   const handleDaySelect = (day) => {
-    setSelectedDay(Number(day));
-    setIsDropdownOpen(false);
+    setSelectedDay(day);
     setChartMode("expiration");
   };
 
@@ -334,7 +319,6 @@ const ProfitCharts = ({
         overflow: "hidden",
       }}
     >
-
       <div
         style={{
           flexGrow: 1,
@@ -342,26 +326,35 @@ const ProfitCharts = ({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          justifyContent: "center",
-          alignItems: 'center',
-          height: positionLabels.length > 1 ? '100%' : 'clamp(300px, 30vh,350px)',
+          marginTop: '20px',
+          height: positionLabels.length > 1 ? "100%" : "clamp(300px, 30vh, 350px)",
         }}
       >
         {chartMode === "expiration" && selectedDay !== null && profitOverDays[selectedDay] && (
-          <HeatmapChart
-            data={[profitOverDays[selectedDay]]} // Single row for selected day
-            xLabels={indexPriceRange}
-            yLabels={[dateForDay[daysToExpiration.indexOf(selectedDay)]]}
-            strikePrices={strikePrices}
-            width="100%"
-            height={positionLabels.length > 1 ? "100%" : "200px"}
-            zMin={yMin}
-            zMax={yMax}
-            yGap={0} // Single row, no gap needed
-            xAxisFormat="k"
-            xAxisTitle="Strike Price"
-            yAxisTitle="Date"
-          />
+          <>
+            <div className="flex-grow w-full">
+              <HeatmapChart
+                data={[profitOverDays[selectedDay]]}
+                xLabels={indexPriceRange}
+                yLabels={[dateForDay[daysToExpiration.indexOf(selectedDay)] || 'Today']}
+                strikePrices={strikePrices}
+                width="100%"
+                height="100%"
+                zMin={yMin}
+                zMax={yMax}
+                yGap={0}
+                xAxisFormat="k"
+                xAxisTitle="Strike Price"
+                yAxisTitle="Date"
+              />
+            </div>
+            <DateAxisSlider
+              dates={dateForDay}
+              days={daysToExpiration}
+              selectedDay={selectedDay}
+              onChange={handleDaySelect}
+            />
+          </>
         )}
         {chartMode === "all" && Object.keys(profitOverDays).length > 0 && (
           <LineChartCanvas
@@ -373,7 +366,7 @@ const ProfitCharts = ({
             }))}
             strikePrices={strikePrices}
             width="100%"
-            height={positionLabels.length > 1 ? "100%" : "clamp(220px,28vh,300px)"}
+            height={positionLabels.length > 1 ? "100%" : "clamp(220px, 28vh, 300px)"}
             yMin={yMin}
             yMax={yMax}
             xAxisFormat="k"
@@ -382,123 +375,64 @@ const ProfitCharts = ({
           />
         )}
       </div>
-
       {showModeToggle && (
         <div
           style={{
             flexShrink: 0,
             display: "flex",
             justifyContent: "flex-start",
-            gap: 8,
-            paddingBottom: 3,
-            flexDirection: 'column',
+            flexDirection: "column",
           }}
         >
-          <button
-            style={{
-              padding: "6px 12px",
-              borderRadius: 4,
-              backgroundColor: chartMode === "all" ? "var(--color-primary)" : "var(--color-primary-hover)",
-              color: chartMode === "all" ? "#fff" : "gray",
-              border: "none",
-              cursor: "pointer",
-            }}
-            onClick={() => setChartMode("all")}
-          >
-            Profit All Days
-          </button>
-          {chartMode !== "expiration" ? (
-            <button
+          <div>
+            <IconButton
+              aria-label="Show profit for all days"
+              onClick={() => setChartMode("all")}
               style={{
-                padding: "6px 12px",
+                padding: "6px",
                 borderRadius: 4,
-                backgroundColor: "var(--color-primary-hover)",
-                color: "gray",
-                border: "none",
+                opacity: chartMode === "all" ? 1 : 0.5,
                 cursor: "pointer",
               }}
-              onClick={() => {
-                setChartMode("expiration");
-                setIsDropdownOpen(true);
+            >
+              <CustomTooltip content="Profit for all days">
+              <img
+                src="/profitAllDay.png"
+                alt="Profit all days icon"
+                style={{
+                  height: 'clamp(1.1rem, 1.2vw,1.4rem)',
+                  width: 'clamp(1.4rem, 1.4vw,1.8rem)',
+                  filter: chartMode === "all" ? "brightness(0) invert(1)" : "none" 
+                }}
+              />
+              </CustomTooltip>
+
+            </IconButton>
+          </div>
+          <div>
+            <IconButton
+              aria-label="Show profit by day"
+              onClick={() => setChartMode("expiration")}
+              style={{
+                borderRadius: 4,
+                opacity: chartMode === "expiration" ? 1 : 0.5,
+                cursor: "pointer",
               }}
             >
-              Profit by Day
-            </button>
-          ) : (
-            <div ref={dropdownRef} style={{ position: "relative" }}>
-              <button
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 4,
-                  backgroundColor: "var(--color-primary)",
-                  color: "#fff",
-                  border: "none",
-                  cursor: "pointer",
-                  width: "120px",
-                  textAlign: "left",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={toggleDropdown}
-              >
-                {selectedDay !== null ? dateForDay[daysToExpiration.indexOf(selectedDay)] : "Select Date"}
-              </button>
-              {isDropdownOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    right: 0,
-                    backgroundColor: "rgba(47, 46, 50, 0.4)",
-                    backdropFilter: "blur(5px)",
-                    borderRadius: 8,
-                    boxShadow: "0 0 12px rgba(0, 0, 0, 0.4)",
-                    color: "var(--color-text)",
-                    maxHeight: daysToExpiration.length > 5 ? "150px" : "auto",
-                    overflowY: daysToExpiration.length > 5 ? "auto" : "visible",
-                    zIndex: 10,
-                    width: "120px",
-                    paddingTop: 0,
-                    paddingBottom: 0,
-                  }}
-                >
-                  {daysToExpiration.map((day, index) => (
-                    <div
-                      key={day}
-                      style={{
-                        padding: "4px 12px",
-                        minHeight: "32px",
-                        fontSize: "0.75rem",
-                        color: selectedDay === day ? "white" : "var(--color-text)",
-                        cursor: "pointer",
-                        backgroundColor:
-                          selectedDay === day ? "var(--color-primary)" : "transparent",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
+             <CustomTooltip content="Profit for specific day">
+                  <img
+                      src="/profitByDate.png"
+                      alt="Profit by day icon"
+                      style={{ 
+                        height: 'clamp(1.1rem, 1.4vw,1.4rem)',
+                        width: 'clamp(1.2rem, 1.4vw,1.6rem)',
+                        filter: chartMode === "expiration" ? "brightness(0) invert(1)" : "none" 
                       }}
-                      onMouseOver={(e) => {
-                        if (selectedDay !== day) {
-                          e.currentTarget.style.backgroundColor = "var(--color-primary-hover)";
-                          e.currentTarget.style.color = "white";
-                        }
-                      }}
-                      onMouseOut={(e) => {
-                        if (selectedDay !== day) {
-                          e.currentTarget.style.backgroundColor = "transparent";
-                          e.currentTarget.style.color = "var(--color-text)";
-                        }
-                      }}
-                      onClick={() => handleDaySelect(day)}
-                    >
-                      {dateForDay[index]}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    />
+              </CustomTooltip>
+
+            </IconButton>
+          </div>
         </div>
       )}
     </div>

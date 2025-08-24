@@ -8,14 +8,20 @@ import './darkTheme.css';
 
 export default function App() {
   const [trades, setTrades] = useState([]);
+  const [chains, setChains] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [btcprice, setBtcPrice] = useState(null);
-
+  const [simulateData, setSimulateData] = useState(null);
   const [loading, setLoading] = useState(true); // Unified loading
 
   const fetchTrades = async () => {
     const tradesResp = await axios.get('/public_trades/latest');
     setTrades(tradesResp.data.data || []);
+  };
+
+  const fetchChains = async () => {
+    const chainsResp = await axios.get('/option_chains/latest');
+    setChains(chainsResp.data.data || []);
   };
 
   const fetchAnalytics = async () => {
@@ -33,6 +39,7 @@ export default function App() {
       try {
         await Promise.all([
           fetchTrades(),
+          fetchChains(),
           fetchAnalytics(),
           fetchBtcPrice(),
         ]);
@@ -46,11 +53,13 @@ export default function App() {
     loadData();
 
     const tradesInterval = setInterval(fetchTrades, 5 * 60 * 1000);
+    const chainsInterval = setInterval(fetchChains, 5 * 60 * 1000);
     const btcInterval = setInterval(fetchBtcPrice, 2 * 60 * 1000);
     const analyticsInterval = setInterval(fetchAnalytics, 4 * 60 * 60 * 1000);
 
     return () => {
       clearInterval(tradesInterval);
+      clearInterval(chainsInterval);
       clearInterval(btcInterval);
       clearInterval(analyticsInterval);
     };
@@ -83,19 +92,25 @@ export default function App() {
                   analyticsLoading={false}
                   btcprice={btcprice}
                   priceLoading={false}
+                  onSimulate={(segmentData) => {
+                    console.log("App.js: received simulate data:", segmentData);  // ✅ confirm
+                    setSimulateData(segmentData);
+                  }}
                 />
               }
             />
             <Route
-              path="/live-option"
+              path="/simulation"
               element={
                 <TradeDashboard
+                  chains={chains}
                   trades={trades}
                   loading={loading}
                   analytics={analytics}
                   analyticsLoading={false}
                   btcprice={btcprice}
                   priceLoading={false}
+                  simulateData={simulateData}
                 />
               }
             />

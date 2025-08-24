@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { formatStrikeLabel, formatExpirationLabel, getTradeSummary } from '../utils/chartHelpers';
+import { formatStrikeLabel, formatExpirationLabel, getTradeSummary } from './utils/chartHelpers';
 import CustomTooltip from './CustomTooltip';
 import Tooltip from '@mui/material/Tooltip';
 
@@ -51,23 +51,11 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
   }, [activeTab, selectedSegment]);
 
   const STRATEGY_COLORS = {
-    "BUY Call": {
-      background: "rgba(36, 101, 57, 0.43)",
-      text: "rgb(141, 179, 154)",
-    },
-    "SELL Put": {
-      background: "rgba(36, 101, 57, 0.43)",
-      text: "rgb(141, 179, 154)",
-    },
-    "SELL Call": {
-      background: "rgba(160, 37, 26, 0.44)",
-      text: "rgb(185, 161, 156)",
-    },
-    "BUY Put": {
-      background: "rgba(160, 37, 26, 0.44)",
-      text: "rgb(185, 161, 156)",
-    },
-  };
+    "BUY Call": { background: "rgba(11, 171, 163, 0.56)", text: "rgb(255, 255, 255)" },
+    "SELL Put": { background: "rgba(157, 8, 8, 0.7)", text: "rgb(255, 255, 255)" },
+    "SELL Call": { background: "rgba(199, 119, 6, 0.95)", text: "rgb(255, 255, 255)" },
+    "BUY Put": { background: "rgba(24, 118, 54, 0.69)", text: "rgb(255, 255, 255)" },
+};
 
   const parseEntryValue = (value) => {
     if (!value || typeof value !== 'string') {
@@ -384,7 +372,9 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
       whiteSpace: 'nowrap',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
-      fontSize:  'clamp(9px, 1vw, 13px)'
+      fontSize:  'clamp(9px, 1vw, 13px)',
+      
+      marginTop: 'clamp(6px ,1vh,10px)',
     },
     tradeCard: {
       display: 'grid',
@@ -418,24 +408,28 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
     },
     expandedTradeDetails: {
       backgroundColor: '#1e1e1e',
-      border: '2px solid #444',
+      border: '1px solid #444',
       borderRadius: 'clamp(4px, 0.8vw, 6px)',
-      padding: 'clamp(6px, 1vw, 8px)',
-      marginBottom: 'clamp(6px, 1vw, 8px)',
+      padding: 'clamp(2px, 0.5vw, 4px)',
       color: '#ddd',
-      fontSize: 'clamp(0.6rem, 1.6vw, 0.7rem)',
+      fontSize: 'clamp(0.6rem, 0.6vw, 0.7rem)',
       display: 'flex',
       flexDirection: 'column',
       gap: '4px',
+      marginBottom: 'clamp(4px, 1vw, 6px)',
+      height: 'clamp(24px, 2.5vh, 28px)',
     },
     expandedDetailRow: {
+      
+      
+      display: 'flex',
       display: 'grid',
-      gridTemplateColumns: 'repeat(3, 1fr)',
+      gridTemplateColumns: 'repeat(4, 1fr)',
       justifyItems: 'center',
       alignItems: 'center',
-      padding: 'clamp(2px, 0.5vw, 4px)',
       backgroundColor: 'rgba(46, 46, 74, 0.64)',
       borderRadius: 'clamp(1px, 0.8vw, 3px)',
+      
     },
     expandedDetailValue: {
       color: '#ddd',
@@ -469,6 +463,25 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
       padding: 'clamp(6px, 1vw, 8px)',
       fontSize: 'clamp(0.7rem, 1.6vw, 0.8rem)',
     },
+
+    expirationRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)', // default for 3 items
+      gap: '6px',
+      borderRadius: ' 0 0  6px 6px',
+      backgroundColor: '#333',
+  },
+  
+  expirationCell: {
+      fontSize: 'clamp(0.6rem, 2vw, 0.7rem)',
+      fontWeight: 400,
+      textAlign: 'center',
+      color: 'rgb(180,180,180)',
+      padding: '4px 6px',
+      borderRadius: '6px',
+      backgroundColor: 'var(--color-background-secondary)',
+      
+  }
   };
 
   const renderTradeCard = (trade, idx, groupIndex) => {
@@ -527,7 +540,7 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
           <div
             style={{
               ...styles.cell,
-              backgroundColor: 'rgb(67, 64, 75)',
+              backgroundColor: 'rgb(42, 42, 44)',
               color: 'rgb(211, 209, 209)',
             }}
           >
@@ -537,7 +550,7 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
             style={{
               ...styles.cell,
               borderRight: 'none',
-              backgroundColor: 'rgba(46, 46, 74, 0.64)',
+              backgroundColor: '#444',
               color: 'rgb(211, 209, 209)',
             }}
           >
@@ -558,14 +571,23 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
                 </CustomTooltip>
               </span>
               <span style={styles.expandedDetailValue}>
-                <CustomTooltip content={`IV%: ${trade.IV_Percent != null && !isNaN(trade.IV_Percent)
-                    ? `${Number(trade.IV_Percent).toFixed(1)} %`
-                    : 'N/A'}`}>
-                  {trade.IV_Percent != null && !isNaN(trade.IV_Percent)
-                    ? `${Number(trade.IV_Percent).toFixed(1)} %`
-                    : 'N/A'}
-                </CustomTooltip>
-              </span>
+                    <CustomTooltip content={`Pirce(USD): ${trade.Price_USD != null && !isNaN(trade.Price_USD )
+                        ? `${Number(trade.Price_USD ).toFixed(1)} USD`
+                        : 'N/A'}`}>
+                      {trade.Price_USD != null && !isNaN(trade.Price_USD)
+                        ? `${Number(trade.Price_USD).toFixed(1)}`
+                        : 'N/A'}
+                    </CustomTooltip>
+                  </span>
+                  <span style={styles.expandedDetailValue}>
+                    <CustomTooltip content={`IV%: ${trade.IV_Percent != null && !isNaN(trade.IV_Percent)
+                        ? `${Number(trade.IV_Percent).toFixed(1)} %`
+                        : 'N/A'}`}>
+                      {trade.IV_Percent != null && !isNaN(trade.IV_Percent)
+                        ? `${Number(trade.IV_Percent).toFixed(1)} %`
+                        : 'N/A'}
+                    </CustomTooltip>
+                  </span>
             </div>
           </div>
         )}
@@ -582,7 +604,52 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
         </div>
       );
     }
+  
     const summaryData = summary[0];
+    const expirations = summaryData.Expiration_Date || [];
+  
+    // Format expiration cells
+    let displayExpirations = expirations.slice(0, 2).map((date, i) => (
+      <div
+        key={i}
+        style={styles.expirationCell}
+        onClick={(e) => e.stopPropagation()} // prevent parent click
+      >
+        <CustomTooltip content={`Expiration Date: ${formatExpirationLabel(date)}`}>
+          {formatExpirationLabel(date)}
+        </CustomTooltip>
+      </div>
+    ));
+  
+    if (expirations.length > 2) {
+      displayExpirations.push(
+        <div
+          key="more"
+          style={styles.expirationCell}
+          onClick={(e) => e.stopPropagation()} // prevent parent click
+        >
+          <CustomTooltip
+            content={`Additional Expirations: ${expirations
+              .slice(2)
+              .map((d) => formatExpirationLabel(d))
+              .join(', ')}`}
+          >
+            and more...
+          </CustomTooltip>
+        </div>
+      );
+    }
+  
+    // Alignment logic
+    let rowStyle = { ...styles.expirationRow };
+    if (displayExpirations.length < 3) {
+      rowStyle = {
+        ...styles.expirationRow,
+        gridTemplateColumns: `repeat(${displayExpirations.length}, auto)`,
+        justifyContent: 'center',
+      };
+    }
+  
     const handleClick = () => {
       if (onSegmentSelect) {
         const payload = {
@@ -595,25 +662,21 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
         onSegmentSelect(payload);
       }
     };
-
+  
     return (
       <div
         key={`${groupType}-${index}`}
         style={styles.summaryCard}
         onClick={handleClick}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = styles.summaryCardHover.backgroundColor;
+          e.currentTarget.style.backgroundColor =
+            styles.summaryCardHover.backgroundColor;
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = styles.summaryCard.background;
         }}
       >
-
-        <div style={styles.summaryHeader}>
-          <CustomTooltip content={`Strategy Name: ${summaryData.Strategy_Type || 'N/A'}`}>
-            {summaryData.Strategy_Type || 'N/A'}
-          </CustomTooltip>
-        </div>
+        {/* Top Info */}
         <div style={styles.summaryBlocktrade}>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             <CustomTooltip content={`Block Trade ID: ${summaryData.Block_Trade_ID || '-'}`}>
@@ -626,6 +689,15 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
             </CustomTooltip>
           </span>
         </div>
+  
+        {/* Strategy Name */}
+        <div style={styles.summaryHeader}>
+          <CustomTooltip content={`Strategy Name: ${summaryData.Strategy_Type || 'N/A'}`}>
+            {summaryData.Strategy_Type || 'N/A'}
+          </CustomTooltip>
+        </div>
+  
+        {/* Row of Metrics */}
         <div style={styles.summaryRow}>
           <CustomTooltip content={`Total Size: ${summaryData.Total_Size}`}>
             {'x' + summaryData.Total_Size}
@@ -648,9 +720,13 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
             {summaryData.Underlying_Price}
           </CustomTooltip>
         </div>
+  
+        {/* 🔹 Expiration Dates Row */}
+        <div style={rowStyle}>{displayExpirations}</div>
       </div>
     );
   };
+  
 
   const titleText = selectedSegment ? (
     contextId === 'strategy/strategyoverview-pie'

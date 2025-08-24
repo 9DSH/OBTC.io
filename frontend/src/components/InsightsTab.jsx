@@ -31,7 +31,7 @@ export default function InsightsTab({ data = [], filters, onSegmentSelect }) {
       console.log("InsightTab onSegmentSelect details:", rawSegment);
     }
   }
-  const totalTrades = data.length;
+
   return (
     <div
       style={{

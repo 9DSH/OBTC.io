@@ -1,4 +1,5 @@
 // Returns a clean, human-friendly step size based on max value and desired number of ticks
+
 export function getRoundedStep(maxValue, desiredSteps = 5) {
   const roughStep = maxValue / desiredSteps;
   const pow = Math.pow(10, Math.floor(Math.log10(roughStep)));
@@ -90,6 +91,7 @@ export const getTradeSummary = (trades) => {
       Entry_Value: trade.Entry_Value ? formatStrikeLabel(trade.Entry_Value) : null,
       Underlying_Price: trade.Underlying_Price ? formatStrikeLabel(trade.Underlying_Price) : null,
       IV_Percent: trade.IV_Percent ? Number(parseFloat(trade.IV_Percent).toFixed(1)) : null,
+      Expiration_Date: trade.Expiration_Date ? [trade.Expiration_Date] : [],
       Strategy_Type: "Single Trade"
     }];
   }
@@ -114,7 +116,6 @@ export const getTradeSummary = (trades) => {
     return acc;
   }, {});
 
-
   // Process each group to create summary
   const summaries = Object.entries(groupedTrades).map(([key, group]) => {
     const [keyType, keyValue] = key.split("|");
@@ -123,14 +124,9 @@ export const getTradeSummary = (trades) => {
     let blockTradeId = keyType === "BLOCK" ? keyValue : group[0].BlockTrade_IDs || null;
 
     // Always try to use Combo_ID first for strategy detection
-    let idToCheck = null;
-    if (group[0].Combo_ID && group[0].Combo_ID !== "null") {
-      idToCheck = group[0].Combo_ID;
-    } else {
-      idToCheck = keyValue;
-    }
-
-
+    let idToCheck = group[0].Combo_ID && group[0].Combo_ID !== "null"
+      ? group[0].Combo_ID
+      : keyValue;
 
     if (idToCheck && typeof idToCheck === "string") {
       if (idToCheck.includes("ICOND")) strategyType = "Iron Condor";
@@ -156,7 +152,7 @@ export const getTradeSummary = (trades) => {
     }
 
     const totalSize = group.reduce((sum, trade) => sum + (Number(trade.Size) || 0), 0);
-    const totalValue = group.reduce((sum, trade) => sum + (Number(trade.Entry_Value) || 0), 0);   
+    const totalValue = group.reduce((sum, trade) => sum + (Number(trade.Entry_Value) || 0), 0);
 
     const entryTime = group.reduce((minDate, trade) => {
       const currentDate = trade.Entry_Date ? new Date(trade.Entry_Date) : null;
@@ -181,7 +177,12 @@ export const getTradeSummary = (trades) => {
       ? validIV.reduce((sum, price) => sum + price, 0) / validIV.length
       : null;
 
-
+    // 🔹 Collect all unique expiration dates in the group
+    const expirationDates = [...new Set(
+      group
+        .map(trade => trade.Expiration_Date)
+        .filter(Boolean) // remove null/undefined
+    )];
 
     return {
       Strategy_ID: strategyId,
@@ -192,6 +193,7 @@ export const getTradeSummary = (trades) => {
       Entry_Value: totalValue ? formatStrikeLabel(totalValue) : null,
       Underlying_Price: avgUnderlyingPrice ? formatStrikeLabel(avgUnderlyingPrice) : null,
       IV_Percent: avgIV !== null ? Number(avgIV.toFixed(1)) : null,
+      Expiration_Date: expirationDates, // 🔹 array of 1 or more expiration dates
       Strategy_Type: strategyType
     };
   });

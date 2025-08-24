@@ -6,17 +6,28 @@ import LiveOptionTab from './LiveOption/LiveOptionTab'
 import SimulationTab from './LiveOption/SimulationTab'
 import TabsBar from './TabsBar';
 
-export default function TradeDashboard({ trades, 
+export default function TradeDashboard({ 
+                                    chains,
+                                    trades, 
                                     loading, 
                                     analytics, 
                                     analyticsLoading, 
                                     btcprice, 
-                                    priceLoading }) {
-    
-  const [activeTab, setActiveTab] = useState('Insights');
+                                    priceLoading,
+                                    simulateData }) {
 
+  const [activeTab, setActiveTab] = useState('Simulation');
 
-  const tabNames = ['Live Trade Option','Simulation'];
+  
+  useEffect(() => {
+    if (simulateData) {
+      console.log("TradeDashboard: received simulateData:", simulateData);
+      setActiveTab("Simulation");   // 👈 switch automatically
+    }
+  }, [simulateData]);
+
+  
+  const tabNames = ['Simulation', 'Live Trade Option'];
   if (loading) {
         return (
           <div style={{
@@ -37,14 +48,20 @@ export default function TradeDashboard({ trades,
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'Live Trade Option':
-        return (
-          <LiveOptionTab/>
-        );
+      
       case 'Simulation':
         return (
-          <SimulationTab/>
+          <SimulationTab 
+                chains={chains} 
+                trades={trades} 
+                btcPrice={btcprice}
+                simulateData={simulateData}
+                />
         );
+      case 'Live Trade Option':
+          return (
+            <LiveOptionTab/>
+          );
     }
   };
   return (

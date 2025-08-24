@@ -3,7 +3,7 @@ import {
   getRoundedStep,
   generateYTicks,
   formatStrikeLabel,
-} from "../utils/chartHelpers";
+} from "./utils/chartHelpers";
 
 const COLORS = {
   "Sell Call": "darkorange",
@@ -53,7 +53,6 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
         if (!value || (Array.isArray(value) && value.length === 0)) return true;
         if (key === "Entry_Date") {
           if (!value || (!value.start && !value.end)) {
-            console.log('No Entry_Date filter applied');
             return true;
           }
           const start = value.start ? new Date(value.start) : null;

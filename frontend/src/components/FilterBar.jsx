@@ -1,7 +1,7 @@
 import {
   formatExpirationLabel,
   formatStrikeLabel,
-} from "../utils/chartHelpers";
+} from "./utils/chartHelpers";
 import React, { useState, useEffect, useRef } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -45,7 +45,7 @@ export const DEFAULT_FILTERS = {
   Side: '',
   Option_Type: '',
   Size: [0.1, 2000],
-  Entry_Value: [0, 3000000],
+  Entry_Value: [0, 100000000],
   Strike_Price: [],
   Expiration_Date: [],
 };
@@ -72,32 +72,68 @@ const DatePickerPortal = ({ children }) => {
   return portalRef.current ? createPortal(children, portalRef.current) : null;
 };
 
-export default function FilterBar({ filters, setFilters, options }) {
-  const [local, setLocal] = useState({
-    ...filters,
-    Entry_Date: filters.Entry_Date && typeof filters.Entry_Date === 'object'
-      ? {
-          start: filters.Entry_Date.start ? new Date(filters.Entry_Date.start) : null,
-          end: filters.Entry_Date.end ? new Date(filters.Entry_Date.end) : null,
-        }
-      : { start: filters.Entry_Date ? new Date(filters.Entry_Date) : null, end: null },
-  });
+// Helper function to format numbers with K, M, B
+const formatValue = (value) => {
+  if (value >= 1000000000) {
+    return (value / 1000000000).toFixed(1) + 'B';
+  }
+  if (value >= 1000000) {
+    return (value / 1000000).toFixed(1) + 'M';
+  }
+  if (value >= 1000) {
+    return (value / 1000).toFixed(1) + 'K';
+  }
+  return value.toFixed(1);
+};
 
-  useEffect(() => {
-    const newEntryDate = filters.Entry_Date && typeof filters.Entry_Date === 'object'
-      ? {
-          start: filters.Entry_Date.start ? new Date(filters.Entry_Date.start) : null,
-          end: filters.Entry_Date.end ? new Date(filters.Entry_Date.end) : null,
-        }
-      : { start: filters.Entry_Date ? new Date(filters.Entry_Date) : null, end: null };
-
-    setLocal({
+export default function FilterBar({ filters, setFilters, options, data }) {
+  const initialMaxSize = options.maxSize || DEFAULT_FILTERS.Size[1];
+  const initialMaxEntryValue = options.maxEntryValue || DEFAULT_FILTERS.Entry_Value[1];
+  
+  const getInitialLocalState = () => {
+    return {
       ...filters,
-      Entry_Date: newEntryDate,
-    });
-  }, [filters]);
+      Entry_Date: filters.Entry_Date && typeof filters.Entry_Date === 'object'
+        ? {
+            start: filters.Entry_Date.start ? new Date(filters.Entry_Date.start) : null,
+            end: filters.Entry_Date.end ? new Date(filters.Entry_Date.end) : null,
+          }
+        : { start: filters.Entry_Date ? new Date(filters.Entry_Date) : null, end: null },
+      Size: filters.Size || [0.1, initialMaxSize],
+      Entry_Value: filters.Entry_Value || [0, initialMaxEntryValue]
+    };
+  };
 
-  const handleReset = () => setFilters(DEFAULT_FILTERS);
+  const [local, setLocal] = useState(getInitialLocalState);
+
+  // Set the default filter state based on the calculated maximums from parent
+  useEffect(() => {
+    setLocal(prevLocal => {
+      // Check if the current filter values are the old defaults
+      const isDefaultSize = prevLocal.Size[1] === DEFAULT_FILTERS.Size[1];
+      const isDefaultEntryValue = prevLocal.Entry_Value[1] === DEFAULT_FILTERS.Entry_Value[1];
+
+      // Update only if they are the old defaults
+      if (isDefaultSize || isDefaultEntryValue) {
+        return {
+          ...prevLocal,
+          Size: isDefaultSize ? [prevLocal.Size[0], options.maxSize] : prevLocal.Size,
+          Entry_Value: isDefaultEntryValue ? [prevLocal.Entry_Value[0], options.maxEntryValue] : prevLocal.Entry_Value,
+        };
+      }
+      return prevLocal;
+    });
+  }, [options.maxSize, options.maxEntryValue, setLocal]);
+
+  const handleReset = () => {
+    const newFilters = {
+      ...DEFAULT_FILTERS,
+      Size: [0.1, options.maxSize],
+      Entry_Value: [0, options.maxEntryValue]
+    };
+    setLocal(newFilters);
+    setFilters(newFilters);
+  };
 
   const handleChange = (e) =>
     setLocal((l) => ({ ...l, [e.target.name]: e.target.value }));
@@ -357,7 +393,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                 justifyContent: 'center',
               }}
             >
-              {local.Size[0]} - {local.Size[1]}
+              {formatValue(local.Size[0])} - {formatValue(local.Size[1])}
             </Button>
             <Popover
               open={Boolean(sizeAnchor)}
@@ -372,9 +408,10 @@ export default function FilterBar({ filters, setFilters, options }) {
                   value={local.Size}
                   onChange={handleSizeSlider}
                   min={0.1}
-                  max={2000}
+                  max={options.maxSize || DEFAULT_FILTERS.Size[1]}
                   step={1}
                   valueLabelDisplay="auto"
+                  valueLabelFormat={formatValue}
                   sx={{
                     color: 'var(--color-primary)',
                     '& .MuiSlider-thumb': { width: 'clamp(8px, 1vw, 12px)', height: 'clamp(8px, 1vw, 12px)', border: '2px solid #fff' },
@@ -404,7 +441,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                 justifyContent: 'center',
               }}
             >
-              {local.Entry_Value[0]} - {local.Entry_Value[1]}
+              {formatValue(local.Entry_Value[0])} - {formatValue(local.Entry_Value[1])}
             </Button>
             <Popover
               open={Boolean(entryAnchor)}
@@ -419,9 +456,10 @@ export default function FilterBar({ filters, setFilters, options }) {
                   value={local.Entry_Value}
                   onChange={handleEntrySlider}
                   min={0}
-                  max={3000000}
+                  max={options.maxEntryValue || DEFAULT_FILTERS.Entry_Value[1]}
                   step={1000}
                   valueLabelDisplay="auto"
+                  valueLabelFormat={formatValue}
                   sx={{
                     color: 'var(--color-primary)',
                     '& .MuiSlider-thumb': { width: 'clamp(8px, 1vw, 12px)', height: 'clamp(8px, 1vw, 12px)', border: '1px solid #fff' },
@@ -497,7 +535,7 @@ export default function FilterBar({ filters, setFilters, options }) {
                   textOverflow: 'ellipsis',
                 },
                 height: 'clamp(28px, 3.5vw, 32px)',
-               minWidth: 'clamp(100px, 5vw, 140px)',
+                minWidth: 'clamp(100px, 5vw, 140px)',
               }}
             >
               {(options.expirationDates || []).map((d) => (

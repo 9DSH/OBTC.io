@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import ProfitCharts from './ProfitCharts/ProfitCharts';
-import { formatStrikeLabel, formatExpirationLabel, getTradeSummary, generateCustomGradientColors } from "../utils/chartHelpers";
+import { formatStrikeLabel, formatExpirationLabel, getTradeSummary, generateCustomGradientColors } from "./utils/chartHelpers";
 import CustomTooltip from "./CustomTooltip";
 import {
     Chart as ChartJS,
@@ -13,11 +13,18 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
-export default function DetailsBar({ activeTab, selectedSegment, filters, contextId, width = '100%', height = 'clamp(200px, 30vh, 320px)' }) {
+export default function DetailsBar({ activeTab, 
+                                     selectedSegment, 
+                                    filters, 
+                                    contextId, 
+                                    width = '100%', 
+                                    height = 'clamp(200px, 30vh, 320px)',
+                                    onSimulate,
+                                 }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [simulationData, setSimulationData] = useState(null);
     const [followData, setFollowData] = useState(null);
-    
+    const [isSimulating, setIsSimulating] = useState(false);
      const [expandedTradeIds, setExpandedTradeIds] = useState(new Set());
 
     const toggleExpand = () => {
@@ -27,8 +34,11 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
     useEffect(() => {
         if (selectedSegment) {
             setIsExpanded(true);
+            // Reset simulation state when selectedSegment changes
+            setIsSimulating(false);
         } else {
             setIsExpanded(false);
+            setIsSimulating(false);
         }
     }, [activeTab, selectedSegment]);
 
@@ -218,7 +228,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             padding: 'clamp(8px, 1.5vw, 12px)',
             boxSizing: 'border-box',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'center'
         },
         summaryCard: {
             background: "var(--color-background-bar)",
@@ -236,12 +246,14 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             justifyContent: 'center',
             padding: 'clamp(0.2rem, 0.3vw,0.4rem) clamp(0.3rem, 0.5vw,0.6rem)',
             backgroundColor: 'var(--color-hover-trans)',
-            borderRadius: 'clamp(1px, 0.8vw, 5px)',
+            borderRadius: '6px 6px 0 0',
             fontSize: 'clamp(0.6rem, 2vw, 0.7rem)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             gap: 'clamp(0.3rem, 1.1vw, 2.4rem)',
+            
+            marginTop: 'clamp(6px ,1vh,10px)',
         },
         summaryBlocktrade: {
             fontSize: 'clamp(0.4rem, 0.85vw, 0.7rem)',
@@ -250,7 +262,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             display: 'flex',
             justifyContent: 'center',
             gap: 'clamp(1rem, 1.4vw, 2.5rem)',
-            padding: 'clamp(0.2rem, 0.3vw,0.4rem) clamp(0.2rem, 0.3vw,0.4rem)',
+            marginBottom: 'clamp(0.4rem, 0.3vw, 0.6rem)',
         },
         emptySummary: {
             color: "#777",
@@ -307,7 +319,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
           expandedDetailRow: {
             display: 'flex',
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             justifyItems: 'center',
             alignItems: 'center',
             backgroundColor: 'rgba(46, 46, 74, 0.64)',
@@ -318,15 +330,35 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             color: '#ddd',
           },
           tradeCardHover: {
-            backgroundColor: '#2e2e2e', // or any other color you want for the hover state
+            backgroundColor: '#2e2e2e', 
+
         },
+        expirationRow: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)', // default for 3 items
+            gap: '6px',
+            borderRadius: ' 0 0  6px 6px',
+            backgroundColor: '#333',
+        },
+        
+        expirationCell: {
+            fontSize: 'clamp(0.6rem, 2vw, 0.7rem)',
+            fontWeight: 400,
+            textAlign: 'center',
+            color: 'rgb(180,180,180)',
+            padding: '4px 6px',
+            borderRadius: '6px',
+            backgroundColor: 'var(--color-background-secondary)',
+            
+        }
+        
     };
 
     const STRATEGY_COLORS = {
-        "BUY Call": { background: "rgba(36, 101, 57, 0.43)", text: "rgb(141, 179, 154)" },
-        "SELL Put": { background: "rgba(36, 101, 57, 0.43)", text: "rgb(141, 179, 154)" },
-        "SELL Call": { background: "rgba(160, 37, 26, 0.44)", text: "rgb(185, 161, 156)" },
-        "BUY Put": { background: "rgba(160, 37, 26, 0.44)", text: "rgb(185, 161, 156)" },
+        "BUY Call": { background: "rgba(11, 171, 163, 0.56)", text: "rgb(255, 255, 255)" },
+        "SELL Put": { background: "rgba(157, 8, 8, 0.7)", text: "rgb(255, 255, 255)" },
+        "SELL Call": { background: "rgba(199, 119, 6, 0.95)", text: "rgb(255, 255, 255)" },
+        "BUY Put": { background: "rgba(24, 118, 54, 0.69)", text: "rgb(255, 255, 255)" },
     };
     const renderTradeCard = (trade, idx) => {
         const side = (trade.Side || '').trim();
@@ -384,7 +416,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
               <div
                 style={{
                   ...styles.cell,
-                  backgroundColor: 'rgb(67, 64, 75)',
+                  backgroundColor: 'rgb(42, 42, 44)',
                   color: 'rgb(211, 209, 209)',
                 }}
               >
@@ -394,7 +426,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                 style={{
                   ...styles.cell,
                   borderRight: 'none',
-                  backgroundColor: 'rgba(46, 46, 74, 0.64)',
+                  backgroundColor: '#444',
                   color: 'rgb(211, 209, 209)',
                 }}
               >
@@ -415,6 +447,15 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                     </CustomTooltip>
                   </span>
                   <span style={styles.expandedDetailValue}>
+                    <CustomTooltip content={`Pirce(USD): ${trade.Price_USD != null && !isNaN(trade.Price_USD )
+                        ? `${Number(trade.Price_USD ).toFixed(1)} USD`
+                        : 'N/A'}`}>
+                      {trade.Price_USD != null && !isNaN(trade.Price_USD)
+                        ? `${Number(trade.Price_USD).toFixed(1)}`
+                        : 'N/A'}
+                    </CustomTooltip>
+                  </span>
+                  <span style={styles.expandedDetailValue}>
                     <CustomTooltip content={`IV%: ${trade.IV_Percent != null && !isNaN(trade.IV_Percent)
                         ? `${Number(trade.IV_Percent).toFixed(1)} %`
                         : 'N/A'}`}>
@@ -423,6 +464,7 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                         : 'N/A'}
                     </CustomTooltip>
                   </span>
+
                 </div>
               </div>
             )}
@@ -430,35 +472,44 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
         );
       };
 
+// ------------- Simulation / Follow Button-----------------
     const renderLiveTradeButtons = () => {
         const summary = selectedSegment?.trades ? getTradeSummary(selectedSegment.trades)[0] : null;
-
+    
         if (!summary) {
-            return null;
+        return null;
         }
-
+    
         return (
-            <div style={styles.cardIconHeader}>
-                <CustomTooltip content="Simulation">
-                    <img
-                        src="/simulation.png"
-                        alt="Simulation"
-                        style={styles.simulateIconButton}
-                        onClick={() => setSimulationData(summary)}
-                    />
-                </CustomTooltip>
-                <CustomTooltip content="Follow">
-                    <img
-                        src="/follow.png"
-                        alt="Follow"
-                        style={styles.followIconButton}
-                        onClick={() => setFollowData(summary)}
-                    />
-                </CustomTooltip>
-            </div>
+        <div style={styles.cardIconHeader}>
+            <CustomTooltip content={isSimulating ? "This strategy is already in simulation" : "Simulation"}>
+            <img
+                src={isSimulating ? "/simulate_active.png" : "/simulate.png"}
+                alt="Simulate"
+                style={styles.simulateIconButton}
+                onClick={() => {
+                if (!isSimulating) {
+                    console.log("Simulate clicked – full selectedSegment:", selectedSegment);
+                    onSimulate(selectedSegment);
+                    setIsSimulating(true);
+                }
+                }}
+            />
+            </CustomTooltip>
+    
+            <CustomTooltip content="Follow">
+            <img
+                src="/follow.png"
+                alt="Follow"
+                style={styles.followIconButton}
+                onClick={() => setFollowData(summary)}
+            />
+            </CustomTooltip>
+        </div>
         );
     };
-
+    
+// ------------- Options Distribution -----------------
     const renderInsightPutCallDist = () => {
         const strike = selectedSegment?.strike || 'N/A';
         const groupedData = selectedSegment?.groupedData || {};
@@ -559,16 +610,24 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
         
         const renderChart = (label) => {
             const trades = groupedData[label] || [];
+            const totalTrades = Object.values(groupedData).reduce((sum, arr) => sum + arr.length, 0);
+            const percentage = totalTrades > 0 ? ((trades.length / totalTrades) * 100).toFixed(1) : 0;
+        
             return (
                 <div key={label} style={styles.chartBox}>
                     <div style={styles.chartTitle}>
                         {label}
                     </div>
         
-                    {/* 🔹 Show total trades count */}
-                    <div style={{ fontSize: 'clamp(8px, 1vw, 10px)', 
-                                   fontWeight: 400, 
-                                    color: "rgb(154, 154, 154)" }}> {trades.length} Trade{trades.length !== 1 ? 's' : ''}</div>
+                    {/* 🔹 Show total trades count + percentage */}
+                    <div style={{ 
+                        fontSize: 'clamp(8px, 1vw, 10px)', 
+                        fontWeight: 400, 
+                        color: "rgb(154, 154, 154)" 
+                    }}>
+                        {trades.length} Trade{trades.length !== 1 ? 's' : ''} 
+                        {totalTrades > 0 && ` (${percentage}%)`}
+                    </div>
         
                     {trades.length === 0 ? (
                         <div style={styles.emptyBox}>No trades...</div>
@@ -602,51 +661,91 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
             </div>
         );
     };
-
+// ------------- Strateges / Premium By strike -----------------
     const renderStrategyOverview = () => {
         const trades = selectedSegment?.trades || [];
         const tradeSummaries = getTradeSummary(trades);
-        const renderSummaryCard = (summary, idx) => (
-            <div key={idx} style={styles.summaryCard}>
-
-                <div style={styles.summaryHeader}>
-                    <div style={{ width: '100%' }}>
-                        <CustomTooltip content={`Strategy Name: ${summary.Strategy_Type}`}>
-                            {summary.Strategy_Type}
+    
+        const renderSummaryCard = (summary, idx) => {
+            const expirations = summary.Expiration_Date || [];
+            let displayExpirations = expirations.slice(0, 2).map((date, i) => (
+                <div key={i} style={styles.expirationCell}>
+                    <CustomTooltip content={`Expiration Date: ${formatExpirationLabel(date)}`}>
+                        {formatExpirationLabel(date)}
+                    </CustomTooltip>
+                </div>
+            ));
+        
+            if (expirations.length > 2) {
+                displayExpirations.push(
+                    <div key="more" style={styles.expirationCell}>
+                        <CustomTooltip content={`Additional Expirations: ${expirations.slice(2).map(d => formatExpirationLabel(d)).join(', ')}`}>
+                            and more...
                         </CustomTooltip>
                     </div>
+                );
+            }
+        
+            // Determine alignment style
+            let rowStyle = { ...styles.expirationRow };
+            if (displayExpirations.length < 3) {
+                rowStyle = { 
+                    ...styles.expirationRow, 
+                    gridTemplateColumns: `repeat(${displayExpirations.length}, auto)`,
+                    justifyContent: 'center'
+                };
+            }
+        
+            return (
+                <div key={idx} style={styles.summaryCard}>
+                    <div style={styles.summaryBlocktrade}>
+                        <span>
+                            <CustomTooltip content={`Block Trade ID: ${summary.Block_Trade_ID || 'Public Trade'}`}>
+                                {summary.Block_Trade_ID || 'Public Trade'}
+                            </CustomTooltip>
+                        </span>
+                        <span>
+                            <CustomTooltip content={`Entry Time: ${summary.Entry_Time}`}>
+                                {summary.Entry_Time}
+                            </CustomTooltip>
+                        </span>
+                    </div>
+        
+                    <div style={styles.summaryHeader}>
+                        <div style={{ width: '100%' }}>
+                            <CustomTooltip content={`Strategy Name: ${summary.Strategy_Type}`}>
+                                {summary.Strategy_Type}
+                            </CustomTooltip>
+                        </div>
+                    </div>
+        
 
-                </div>
-                <div style={styles.summaryBlocktrade}>
-                    <span>
-                        <CustomTooltip content={`Block Trade ID: ${summary.Block_Trade_ID || 'Public Trade'}`}>
-                            {summary.Block_Trade_ID || 'Public Trade'}
+        
+                    <div style={styles.summaryRow}>
+                        <CustomTooltip content={`Total Size: ${summary.Total_Size}`}> {'x' + summary.Total_Size} </CustomTooltip>
+                        <CustomTooltip content={`Total Entry Value: ${summary.Entry_Value}`}> {summary.Entry_Value} </CustomTooltip>
+                        <CustomTooltip content={`Average IV %: ${summary.IV_Percent != null && !isNaN(summary.IV_Percent) ? Number(summary.IV_Percent).toFixed(1) : 'N/A'}`}>
+                            {summary.IV_Percent != null && !isNaN(summary.IV_Percent) ? Number(summary.IV_Percent).toFixed(1) + ' %' : 'N/A'}
                         </CustomTooltip>
-                    </span>
-                    <span>
-                        <CustomTooltip content={`Entry Time: ${summary.Entry_Time}`}>
-                            {summary.Entry_Time}
-                        </CustomTooltip>
-                    </span>
+                        <CustomTooltip content={`Underlying Price: ${summary.Underlying_Price}`}> {summary.Underlying_Price} </CustomTooltip>
+                    </div>
+                    {/* 🔹 Expiration Dates Row */}
+                    <div style={rowStyle}>
+                        {displayExpirations}
+                    </div>
                 </div>
-                <div style={styles.summaryRow}>
-                    <CustomTooltip content={`Total Size: ${summary.Total_Size}`}> {'x' + summary.Total_Size} </CustomTooltip>
-                    <CustomTooltip content={`Total Entry Value: ${summary.Entry_Value}`}> {summary.Entry_Value} </CustomTooltip>
-                    <CustomTooltip content={`Average IV %: ${summary.IV_Percent != null && !isNaN(summary.IV_Percent) ? Number(summary.IV_Percent).toFixed(1) : 'N/A'}`}>
-                        {summary.IV_Percent != null && !isNaN(summary.IV_Percent) ? Number(summary.IV_Percent).toFixed(1) + ' %' : 'N/A'}
-                    </CustomTooltip>
-                    <CustomTooltip content={`Underlying Price: ${summary.Underlying_Price}`}> {summary.Underlying_Price} </CustomTooltip>
-                </div>
-            </div>
-        );
+            );
+        };
+        
+    
         return (
-            
             <div style={styles.content}>
                 <div style={styles.mainProfitColumns}>
                     <div style={styles.leftColumn}>
                         <div style={styles.top_leftgrid}>
-                            {tradeSummaries.length > 0 ? tradeSummaries.map(renderSummaryCard) : <div style={styles.emptySummary}>No summary available</div>}
-                        
+                            {tradeSummaries.length > 0 
+                              ? tradeSummaries.map(renderSummaryCard) 
+                              : <div style={styles.emptySummary}>No summary available</div>}
                         </div>
                         <div style={styles.cardGrid}>
                             {[...trades].sort((a, b) => parseFloat(b.Strike_Price) - parseFloat(a.Strike_Price)).map(renderTradeCard)}
@@ -654,13 +753,20 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
                     </div>
                     {renderLiveTradeButtons()}
                     <div style={styles.profitColumn }>
-                    
-                        <ProfitCharts selectedTrades={trades} initialMode="all" showModeToggle={true} width="100%" height="100%" />
+                        <ProfitCharts selectedTrades={trades} 
+                                      initialMode="all" 
+                                       showModeToggle={true} 
+                                       width="100%" 
+                                       height="100%" 
+                        />
                     </div>
                 </div>
             </div>
         );
     };
+
+
+ // ------------- top Volume -----------------   
     const renderInsightTopVolume = () => {
         const trades = selectedSegment?.trades || [];
         const yValue = selectedSegment?.y;
@@ -773,9 +879,18 @@ export default function DetailsBar({ activeTab, selectedSegment, filters, contex
         const renderChart = (tradeType) => {
             const typeTrades = tradesByType[tradeType] || [];
             const tradeCount = typeTrades.length;
+            const percentage = totalTrades > 0 ? ((tradeCount / totalTrades) * 100).toFixed(1) : 0;
             return (
                 <div key={tradeType} style={styles.chartBox}>
-                    <div style={styles.chartTitle}> {tradeType} <div style={{ fontSize: 10, fontWeight: 400, color: "rgb(154, 154, 154)" }}> {tradeCount} Trade{tradeCount !== 1 ? 's' : ''}</div> </div>
+                    <div style={styles.chartTitle}> {tradeType} 
+                        <div style={{ fontSize: 10, 
+                                      fontWeight: 400, 
+                                      color: "rgb(154, 154, 154)" 
+                                    }}> 
+                            {tradeCount} Trade{tradeCount !== 1 ? 's' : ''}
+                            {totalTrades > 0 && ` (${percentage}%)`}
+                        </div> 
+                    </div>
                     {tradeCount === 0 ? (
                         <div style={styles.emptyBox}>No trades...</div>
                     ) : (

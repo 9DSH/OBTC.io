@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTable, useSortBy } from 'react-table';
-import { formatStrikeLabel} from "../utils/chartHelpers";
+import { formatStrikeLabel} from "./utils/chartHelpers";
 
 import dayjs from 'dayjs';
 
@@ -11,7 +11,6 @@ const numericColumns = [
   'Price_USD',
   'Entry_Value',
   'Underlying_Price',
-  'IV_Percent',
 ];
 
 const columnClamp = {
@@ -23,7 +22,7 @@ const columnClamp = {
   Price_BTC: 'clamp(60px, 10vw, 70px)',
   Price_USD: 'clamp(60px, 10vw, 70px)',
   Entry_Value: 'clamp(70px, 10vw, 90px)',
-  IV_Percent: 'clamp(40px, 8vw, 50px)',
+  BlockTrade_IDs: 'clamp(40px, 8vw, 50px)',
   Strike_Price: 'clamp(80px, 9vw, 90px)',
   Underlying_Price: 'clamp(80px, 9vw, 90px)',
   Expiration_Date: 'clamp(90px, 10vw, 120px)',
@@ -114,7 +113,7 @@ const dateSortType = (rowA, rowB, columnId) => {
   return a > b ? 1 : a < b ? -1 : 0;
 };
 
-export default function TradesTable({ data = [], filters }) {
+export default function DataTable({ data = [], filters }) {
   const filteredData = useMemo(() => {
     return data.filter((item) => {
       const itemDate = item.Entry_Date ? new Date(item.Entry_Date) : null;
@@ -149,9 +148,9 @@ export default function TradesTable({ data = [], filters }) {
   }, [data, filters]);
 
   const formatEntry = (v) =>
-    v ? dayjs(v).format('YYYY MMM DD HH:mm:ss').toUpperCase() : '-';
+    v ? dayjs(v).format('DD MMM YY HH:mm:ss').toUpperCase() : '-';
   const formatExpire = (v) =>
-    v ? dayjs(v).format('YYYY MMM DD').toUpperCase() : '-';
+    v ? dayjs(v).format('DD MMM YY').toUpperCase() : '-';
 
   const columns = useMemo(
     () => [
@@ -189,6 +188,7 @@ export default function TradesTable({ data = [], filters }) {
         minWidth: columnClamp.Option_Type,
         sortType: 'alphanumeric',
       },
+
       ...numericColumns.map((col) => ({
         Header: col.replace(/_/g, ' '),
         accessor: col,
@@ -207,6 +207,24 @@ export default function TradesTable({ data = [], filters }) {
         },
         sortType: numericSortType,
       })),
+
+      {
+        Header: 'Block ID',
+        accessor: 'BlockTrade_IDs',
+        Cell: ({ value }) => {
+          if (!value) return '-';
+          // If it's a string like "BLOCK-216039"
+          if (typeof value === "string") {
+            return value.replace(/^BLOCK-/, ""); 
+          }
+          // If it's an array of IDs
+          if (Array.isArray(value)) {
+            return value.map(v => v.replace(/^BLOCK-/, "")).join(", ");
+          }
+
+          return value;
+        },
+      }
     ],
     []
   );
@@ -239,6 +257,17 @@ export default function TradesTable({ data = [], filters }) {
     0
   );
 
+    // ✅ Get date range
+  const entryDates = filteredData
+  .map(t => toValidDate(t.Entry_Date))
+  .filter(d => d.getFullYear() > 1900); // ignore invalid dates
+
+  const minDate = entryDates.length ? new Date(Math.min(...entryDates)) : null;
+  const maxDate = entryDates.length ? new Date(Math.max(...entryDates)) : null;
+
+  const formatRangeDate = (d) =>
+  d ? dayjs(d).format('DD MMM YY').toUpperCase() : '-';
+
   return (
     <div >
   {/* ----------------- Metrics Row ----------------- */}
@@ -252,7 +281,40 @@ export default function TradesTable({ data = [], filters }) {
           marginTop: '0.5rem',
         }}
       >
-
+        <div
+          style={{
+            width: "200px",
+            alignItems: "center",
+            justifyContent: "center",
+            display: "flex",
+            flexDirection: "column",
+            textAlign: "center",
+            borderRight: '1px solid #333', // separator
+          }}
+        >
+        <div
+          style={{
+            whiteSpace: "pre-line",
+            fontWeight: 400,
+            fontSize: "clamp(0.5rem, 1vw, 0.75rem)",
+            color: "white",
+            fontFamily: "'Roboto', sans-serif",
+            letterSpacing: '0.1rem'
+          }}
+        >
+          {formatRangeDate(minDate)} - {formatRangeDate(maxDate)}
+          <div
+            style={{
+              fontWeight: 400,
+              fontSize: "clamp(0.5rem, 0.9vw, 0.6rem)",
+              color: "gray",
+              fontFamily: "'Roboto', sans-serif",
+            }}
+          >
+            Date Range
+          </div>
+        </div>
+      </div>
         <div style={{
                 width: "100px",
                 alignItems: "center",
@@ -277,7 +339,7 @@ export default function TradesTable({ data = [], filters }) {
                         color: "gray",
                         fontFamily: "'Roboto', sans-serif",
                       }}>
-                        Trades</div>
+                        Positions</div>
           </div>
         </div>
 
@@ -411,20 +473,25 @@ export default function TradesTable({ data = [], filters }) {
             ) : (
               visible.map((row, i) => {
                 prepareRow(row);
+
+
                 return (
                   <tr
                     {...row.getRowProps()}
                     key={row.id}
                     style={{
-                      backgroundColor: i % 2 === 0 ? '#22232c' : '#1e1f27',
+                      backgroundColor:  i % 2 === 0 
+                      ? '#22232c' 
+                      : '#1e1f27',
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        'var(--color-primary-hover)')
+                      (e.currentTarget.style.backgroundColor = 'var(--color-primary-hover)')
                     }
                     onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        i % 2 === 0 ? '#22232c' : '#1e1f27')
+                      (e.currentTarget.style.backgroundColor = 
+                         i % 2 === 0
+                        ? '#22232c'
+                        : '#1e1f27')
                     }
                   >
                     {row.cells.map((cell) => (

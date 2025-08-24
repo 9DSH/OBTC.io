@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import FilterBar, { DEFAULT_FILTERS } from './FilterBar';
-import { formatStrikeLabel } from "../utils/chartHelpers";
+import { formatStrikeLabel } from "./utils/chartHelpers";
 
 import TabsBar from './TabsBar';
 import InsightsTab from './InsightsTab';
 import StrategiesTab from './StrategiesTab';
-import TradesTable from './TradesTable';
+import DataTable from './DataTable';
 import DetailsBar from './DetailsBar';
 import RightSideBar from './RightSideBar';
 import AccountBar from './AccountBar';
 import TechnicalBar from './TechnicalBar';
 
-export default function TradeDashboard({ trades, 
+export default function MarketWatch({ trades, 
                                          loading , 
                                          analytics, 
                                          analyticsLoading, 
                                          btcprice, 
-                                         priceLoading }) {
+                                         priceLoading,
+                                        onSimulate  }) {
+
+  console.log("MarketWahtch: data:", onSimulate )
 
   const [activeTab, setActiveTab] = useState('Insights');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -29,6 +32,16 @@ export default function TradeDashboard({ trades,
   const strikePrices = Array.from(new Set(trades.map(t => t.Strike_Price))).sort((a, b) => a - b);
   const expirationDates = Array.from(new Set(trades.map(t => t.Expiration_Date || t.Expiration)))
     .sort((a, b) => new Date(a) - new Date(b));
+
+  
+      // Calculate max size and entry value from the trades data
+  const maxEntryValue = trades.length > 0
+        ? Math.max(...trades.map(t => parseFloat(t.Entry_Value)).filter(v => !isNaN(v)))
+        : DEFAULT_FILTERS.Entry_Value[1];
+    
+  const maxSize = trades.length > 0
+        ? Math.max(...trades.map(t => parseFloat(t.Size)).filter(v => !isNaN(v)))
+        : DEFAULT_FILTERS.Size[1];
   
   const tabNames = ['Insights','Strategies', 'Data Table'];
   
@@ -57,7 +70,14 @@ export default function TradeDashboard({ trades,
       </div>
     );
   }
-
+function handleSimulate(segmentData) {
+    console.log("MarketWatch: received simulate data:", segmentData);
+  
+    // ✅ Pass to parent (App.js)
+    if (onSimulate) {
+      onSimulate(segmentData);
+    }
+  }
  // -----------------------------------------------------------------
 // --------------------handles selected segments -------------------
 // -----------------------------------------------------------------
@@ -114,7 +134,7 @@ function handleSegmentSelect(event) {
       case 'Data Table':
       default:
         return (
-          <TradesTable
+          <DataTable
             data={trades}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
@@ -146,7 +166,7 @@ function handleSegmentSelect(event) {
                        fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
     
                    }}> 
-        v1.0.2
+        v1.0.3
      </div>
 
       {/* Technical Bar */}
@@ -162,7 +182,12 @@ function handleSegmentSelect(event) {
       <FilterBar
         filters={filters}
         setFilters={setFilters}
-        options={{ strikePrices, expirationDates }}
+        options={{
+                    strikePrices,
+                    expirationDates,
+                    maxSize,
+                    maxEntryValue,
+                  }}
       />
 
       {/* Tab Navigation */}
@@ -190,6 +215,7 @@ function handleSegmentSelect(event) {
         selectedSegment={selectedSegment}
         filters={filters}
         contextId={contextId}
+        onSimulate={handleSimulate}
       />
 
       {/* Fixed Right Sidebar */}

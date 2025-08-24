@@ -4,7 +4,7 @@ import {
   formatStrategyDisplay,
   groupStrategies,
 } from "./utils/strategiesUtils";
-import { formatStrikeLabel, formatExpirationLabel, generateCustomGradientColors } from "../../utils/chartHelpers";
+import { formatStrikeLabel, formatExpirationLabel, generateCustomGradientColors } from "../utils/chartHelpers";
 import {
   Tooltip as ChartTooltip,
   Chart as ChartJS,
@@ -97,9 +97,12 @@ export default function StrategyOverview({ strategies, filters, onSegmentSelect 
       if (!acc[strategyType]) {
         acc[strategyType] = { count: 0, groups: [], expirations: {}, totalEntryValue: 0 };
       }
-      acc[strategyType].count += group.length;
+        // ✅ count groups, not trades
+      acc[strategyType].count += 1;
+
       acc[strategyType].groups.push(group);
-      acc[strategyType].totalEntryValue += group.reduce((sum, trade) => sum + (trade.Entry_Value || 0), 0);
+      acc[strategyType].totalEntryValue += group.reduce(
+         (sum, trade) => sum + (trade.Entry_Value || 0), 0);
       const groupExpirations = [...new Set(group.map(t => t.Expiration_Date).filter(Boolean))];
       groupExpirations.forEach(exp => {
         acc[strategyType].expirations[exp] = (acc[strategyType].expirations[exp] || 0) + 1;

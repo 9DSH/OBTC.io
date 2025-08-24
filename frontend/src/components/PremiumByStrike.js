@@ -3,7 +3,7 @@ import {
   getRoundedStep,
   generateYTicks,
   formatStrikeLabel,
-} from "../utils/chartHelpers";
+} from "./utils/chartHelpers";
 
 const COLORS = {
   "Sell Call": "darkorange",

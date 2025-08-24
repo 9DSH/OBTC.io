@@ -14,7 +14,7 @@ const HeatmapChart = ({
   xAxisFormat = "number",
   xAxisTitle = "",
   yAxisTitle = "",
-  strikePrices = [],
+  selectedDayIndex = 0, // index of the day to plot for heat mode
 }) => {
   const canvasRef = useRef();
   const wrapperRef = useRef();
@@ -22,9 +22,8 @@ const HeatmapChart = ({
   const animationStartTimeRef = useRef(null);
 
   const [size, setSize] = useState({ width: 300, height: 200 });
-  const [drawProgress, setDrawProgress] = useState(1); // start fully drawn
+  const [drawProgress, setDrawProgress] = useState(1); // fully drawn
   const [tooltip, setTooltip] = useState(null);
-  
 
   const margin = { top: 40, right: 40, bottom: 70, left: 20 };
   const animationDuration = 400; // ms
@@ -41,19 +40,16 @@ const HeatmapChart = ({
     return () => observer.disconnect();
   }, []);
 
-  // Trigger animation reset on data or related props change
+  // Animation
   useEffect(() => {
-    // Reset animation progress and start animating
     setDrawProgress(0);
     animationStartTimeRef.current = null;
 
-    // Start animation loop
     const step = (timestamp) => {
       if (!animationStartTimeRef.current) animationStartTimeRef.current = timestamp;
       const elapsed = timestamp - animationStartTimeRef.current;
       const progress = Math.min(elapsed / animationDuration, 1);
       setDrawProgress(progress);
-
       if (progress < 1) {
         animationFrameIdRef.current = requestAnimationFrame(step);
       }
@@ -61,7 +57,6 @@ const HeatmapChart = ({
 
     animationFrameIdRef.current = requestAnimationFrame(step);
 
-    // Cleanup on unmount or new data change
     return () => {
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
@@ -70,7 +65,7 @@ const HeatmapChart = ({
     };
   }, []);
 
-  // Draw heatmap on every drawProgress or size or data change
+  // Draw heatmap
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || data.length === 0 || xLabels.length === 0) return;
@@ -100,18 +95,17 @@ const HeatmapChart = ({
 
     ctx.clearRect(0, 0, w, h);
 
-    // Total cells and how many to draw based on drawProgress
+    // Draw heatmap cells
     const totalCells = rows * cols;
     const cellsToDraw = Math.floor(drawProgress * totalCells);
-
     let drawnCells = 0;
+
     outer: for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         if (drawnCells >= cellsToDraw) break outer;
 
         const val = data[row][col];
-        const t = Math.min(Math.abs(val) / maxVal, 1);
-        const normalized = val / maxVal; // range -1 to 1
+        const normalized = val / maxVal;
         const color = getHeatColor(normalized);
         ctx.fillStyle = color;
         ctx.globalAlpha = 1;
@@ -123,9 +117,9 @@ const HeatmapChart = ({
       }
     }
 
-    // Draw axes fully visible
+    // Draw axes + breakevens
     drawAxes(
-      'heat',
+      "heat",
       ctx,
       w,
       h,
@@ -138,9 +132,19 @@ const HeatmapChart = ({
       "",
       yLabels.map(() => ""),
       1,
-      strikePrices,
+      data[selectedDayIndex] ? { x: xLabels, y: data[selectedDayIndex] } : null,
       margin
     );
+
+    // Draw selected date label in top-left corner
+    if (yLabels[selectedDayIndex]) {
+      ctx.save();
+      ctx.fillStyle = "#999";
+      ctx.font = "12px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText(yLabels[selectedDayIndex], margin.left, margin.top - 30);
+      ctx.restore();
+    }
   }, [
     drawProgress,
     size,
@@ -153,10 +157,10 @@ const HeatmapChart = ({
     xGap,
     xAxisFormat,
     xAxisTitle,
-    strikePrices,
+    selectedDayIndex,
   ]);
 
-  // Tooltip handlers
+  // Tooltip
   const handleMouseMove = (e) => {
     if (!data.length || !xLabels.length) return;
 
@@ -192,8 +196,8 @@ const HeatmapChart = ({
         xAxisFormat === "k" ? (xLabels[col] / 1000) + "k" : xLabels[col];
       const profitFormatted = formatNumberKM(data[row][col]);
       setTooltip({
-        x: 20,
-        y: 10,
+        x: 15,
+        y: 15,
         strike: strikeFormatted,
         profit: profitFormatted,
       });
@@ -209,7 +213,7 @@ const HeatmapChart = ({
       ref={wrapperRef}
       style={{
         width,
-        height,
+        height: 'clamp(180px, 20vh,190px)',
         position: "relative",
         userSelect: "none",
       }}
@@ -225,7 +229,7 @@ const HeatmapChart = ({
             top: `${tooltip.y}px`,
             display: "flex",
             flexDirection: "row",
-            gap: "10px",
+            gap: "clamp(3px, 0.2vw, 10px)",
             transition: "opacity 0.2s ease-in-out",
           }}
         >
@@ -234,7 +238,7 @@ const HeatmapChart = ({
               width: "90px",
               color: "#ccc",
               padding: "2px 4px",
-              fontSize: 11,
+              fontSize: "clamp(9px, 0.7vw, 11px)",
               fontFamily: "Roboto, sans-serif",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -248,7 +252,7 @@ const HeatmapChart = ({
               width: "80px",
               color: "#ccc",
               padding: "2px 4px",
-              fontSize: 11,
+              fontSize: "clamp(9px, 0.7vw, 11px)",
               fontFamily: "Roboto, sans-serif",
               overflow: "hidden",
               textOverflow: "ellipsis",
