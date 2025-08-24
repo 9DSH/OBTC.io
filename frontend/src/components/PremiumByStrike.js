@@ -219,9 +219,7 @@ export default function PremiumByStrike({
         return Array.isArray(v) ? v.includes(item[k]) : String(item[k]) === v;
       });
     });
-  
-    console.log('PremiumByStrike Filtered Data:', result);
-    console.log('PremiumByStrike Filtered Data Length:', result.length);
+
     return result;
   }, [data, filters]);
 

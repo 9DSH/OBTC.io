@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { BrowserRouter, Routes, Route,  Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MarketWatch from './components/MarketWatch';
 import TradeDashboard from './components/TradeDashboard';
 import MainMenu from './components/MainMenu';
@@ -14,39 +14,52 @@ export default function App() {
   const [simulateData, setSimulateData] = useState(null);
   const [loading, setLoading] = useState(true); // Unified loading
 
+  // Fetch functions
   const fetchTrades = async () => {
-    const tradesResp = await axios.get('/public_trades/latest');
-    setTrades(tradesResp.data.data || []);
+    try {
+      const tradesResp = await axios.get('/public_trades/latest');
+      setTrades(tradesResp.data.data || []);
+    } catch (err) {
+      console.error('Error fetching trades:', err);
+    }
   };
 
   const fetchChains = async () => {
-    const chainsResp = await axios.get('/option_chains/latest');
-    setChains(chainsResp.data.data || []);
+    try {
+      const chainsResp = await axios.get('/option_chains/latest');
+      setChains(chainsResp.data.data || []);
+    } catch (err) {
+      console.error('Error fetching chains:', err);
+    }
   };
 
   const fetchAnalytics = async () => {
-    const analyticsResp = await axios.get('/analysis/technical');
-    setAnalytics(analyticsResp.data.data || {});
+    try {
+      const analyticsResp = await axios.get('/analysis/technical');
+      setAnalytics(analyticsResp.data.data || {});
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+    }
   };
 
   const fetchBtcPrice = async () => {
-    const priceResp = await axios.get('/deribit/btcprice');
-    setBtcPrice(priceResp.data.data || {});
+    try {
+      const priceResp = await axios.get('/deribit/btcprice');
+      setBtcPrice(priceResp.data.data || {});
+    } catch (err) {
+      console.error('Error fetching BTC price:', err);
+    }
   };
 
+  // Initial load and intervals
   useEffect(() => {
     const loadData = async () => {
       try {
-        await Promise.all([
-          fetchTrades(),
-          fetchChains(),
-          fetchAnalytics(),
-          fetchBtcPrice(),
-        ]);
+        await Promise.all([fetchTrades(), fetchChains(), fetchAnalytics(), fetchBtcPrice()]);
       } catch (err) {
-        console.error("Error loading data:", err);
+        console.error('Error loading data:', err);
       } finally {
-        setLoading(false); // Data ready
+        setLoading(false);
       }
     };
 
@@ -64,7 +77,14 @@ export default function App() {
       clearInterval(analyticsInterval);
     };
   }, []);
-  console.log("App chain: received simulate data:", chains[0]);
+
+  // Log chains only when they update
+  useEffect(() => {
+    if (chains.length > 0) {
+      console.log('App.js: chains updated', chains[0]);
+    }
+  }, [chains]);
+
   return (
     <BrowserRouter>
       <div
@@ -80,7 +100,7 @@ export default function App() {
       >
         <MainMenu loading={loading} />
 
-        {!loading && (
+        {!loading ? (
           <Routes>
             <Route
               path="/market-watch"
@@ -93,7 +113,7 @@ export default function App() {
                   btcprice={btcprice}
                   priceLoading={false}
                   onSimulate={(segmentData) => {
-                    console.log("App.js: received simulate data:", segmentData);  // ✅ confirm
+                    console.log('App.js: received simulate data:', segmentData);
                     setSimulateData(segmentData);
                   }}
                 />
@@ -117,6 +137,10 @@ export default function App() {
             {/* Redirect all unknown paths to Market Watch */}
             <Route path="*" element={<Navigate to="/market-watch" replace />} />
           </Routes>
+        ) : (
+          <div style={{ textAlign: 'center' , justifyContent: 'center', marginTop: '50px', fontSize: '18px' }}>
+            Loading data...
+          </div>
         )}
       </div>
     </BrowserRouter>
