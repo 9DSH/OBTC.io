@@ -52,7 +52,8 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
   const [expAnchorEl, setExpAnchorEl] = useState(null);
   const [popoverAnchors, setPopoverAnchors] = useState({});
   const lastProcessedData = useRef(null);
-
+  
+  console.log("simulation chain: :", chains[0]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs, openedTabs, activeTabId }));
   }, [tabs, openedTabs, activeTabId]);

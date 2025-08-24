@@ -64,7 +64,7 @@ export default function App() {
       clearInterval(analyticsInterval);
     };
   }, []);
-
+  console.log("App chain: received simulate data:", chains[0]);
   return (
     <BrowserRouter>
       <div
