@@ -1,9 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import {
-  drawAxes,
-  drawLines,
-  formatNumberKM,
-} from "./utils/chartUtils";
+import { drawAxes, drawLines, formatNumberKM } from "./utils/chartUtils";
 import ReactDOM from "react-dom";
 
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
@@ -27,6 +23,7 @@ const LineChartCanvas = ({
   const [tooltip, setTooltip] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [animationDone, setAnimationDone] = useState(false);
+  const [cursor, setCursor] = useState("default");
 
   const margin = { top: 40, right: 30, bottom: 60, left: 55 };
 
@@ -124,7 +121,7 @@ const LineChartCanvas = ({
     requestAnimationFrame(animate);
   }, [animationDone, lines, size]);
 
-  // Redraw on changes to size, lines, hoveredLine, selectedLine, or hoveredPoint
+  // Redraw on changes
   useEffect(() => {
     if (animationDone) drawChart(1);
   }, [animationDone, lines, size, hoveredLine, selectedLine, hoveredPoint]);
@@ -136,6 +133,15 @@ const LineChartCanvas = ({
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
+
+    // Update cursor based on mouse position
+    if (mouseX >= margin.left && mouseY > size.height - margin.bottom) {
+      setCursor("col-resize"); // X-axis area
+    } else if (mouseX < margin.left && mouseY >= margin.top && mouseY <= size.height - margin.bottom) {
+      setCursor("row-resize"); // Y-axis area
+    } else {
+      setCursor("default"); // Plot area
+    }
 
     const w = size.width;
     const h = size.height;
@@ -151,31 +157,45 @@ const LineChartCanvas = ({
     // Determine which lines to consider based on selection
     const targetLines = selectedLine !== null ? [lines[selectedLine]] : lines;
 
+    // Find closest point based on mouse position
     targetLines.forEach((line, index) => {
       const realIndex = selectedLine !== null ? selectedLine : index;
 
-      // Find the closest point to the mouse on this line
+      // Convert mouseX to data x-value
+      const xValue = xMin + ((mouseX - margin.left) / (w - margin.left - margin.right)) * (xMax - xMin);
+
+      // Find the closest x point on this line
+      let minXDist = Infinity;
+      let closestIndex = 0;
       line.x.forEach((px, i) => {
-        const canvasX =
-          margin.left +
-          ((px - xMin) / (xMax - xMin)) * (w - margin.left - margin.right);
-        const canvasY =
-          h -
-          margin.bottom -
-          ((line.y[i] - yMinFinal) / (yMaxFinal - yMinFinal)) *
-            (h - margin.top - margin.bottom);
-
-        const dist = Math.sqrt((mouseX - canvasX) ** 2 + (mouseY - canvasY) ** 2);
-
-        if (dist < minDist) {
-          minDist = dist;
-          closestLine = realIndex;
-          closestPoint = { x: px, y: line.y[i], day: line.name };
+        const dist = Math.abs(px - xValue);
+        if (dist < minXDist) {
+          minXDist = dist;
+          closestIndex = i;
         }
       });
+
+      // Calculate canvas coordinates for the closest point
+      const canvasX =
+        margin.left +
+        ((line.x[closestIndex] - xMin) / (xMax - xMin)) * (w - margin.left - margin.right);
+      const canvasY =
+        h -
+        margin.bottom -
+        ((line.y[closestIndex] - yMinFinal) / (yMaxFinal - yMinFinal)) *
+          (h - margin.top - margin.bottom);
+
+      // Use distance to determine closest line (for highlighting when no line is selected)
+      const dist = Math.sqrt((mouseX - canvasX) ** 2 + (mouseY - canvasY) ** 2);
+
+      if (dist < minDist) {
+        minDist = dist;
+        closestLine = realIndex;
+        closestPoint = { x: line.x[closestIndex], y: line.y[closestIndex], day: line.name };
+      }
     });
 
-    // Update hoveredLine for highlighting
+    // Update hoveredLine for highlighting (dims other lines when not selected)
     if (closestLine !== hoveredLine) {
       setHoveredLine(closestLine);
     }
@@ -278,12 +298,13 @@ const LineChartCanvas = ({
     setHoveredLine(null);
     setHoveredPoint(null);
     setTooltip(null);
+    setCursor("default");
   };
 
   return (
     <div
       ref={wrapperRef}
-      style={{ width, height, position: "relative", userSelect: "none" }}
+      style={{ width, height, position: "relative", userSelect: "none", cursor }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}

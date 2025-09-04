@@ -2,14 +2,21 @@ import React, { useState } from "react";
 import PutCallDistribution from "./PutCallDistribution";
 import PremiumByStrike from './PremiumByStrike';
 import TopVolume from './TopVolume';
+import MarketExposure from './MarketExposure';
 
 const SUBTABS = [
   { id: "putCall", label: "Options Distribution" },
   { id: "premiumVsStrike", label: "Premium by Strike" },
   { id: "topVolume", label: "Top Volume" },
+  { id: "marketExposure", label: "Market Exposure" },
 ];
 
-export default function InsightsTab({ data = [], filters, onSegmentSelect }) {
+export default function InsightsTab({ data = [], 
+                                      chains= [], 
+                                      filters, 
+                                      onSegmentSelect 
+                                    }) 
+                                    {
   const [activeSubtab, setActiveSubtab] = useState("putCall");
   const [selectedSegment, setSelectedSegment] = useState(null);
 
@@ -50,9 +57,9 @@ export default function InsightsTab({ data = [], filters, onSegmentSelect }) {
           alignItems: "center",
           justifyContent: "center",
           gap: "clamp(0.5rem, 3vw, 1rem)",
-          width: "90%",
+          width: "100%",
           maxWidth: "clamp(200px, 80vw, 800px)",
-          margin: "0 auto clamp(1rem, 2vw, 1.5rem) auto",
+          margin: "0 auto clamp(0.5rem, 0.4vw, 1rem) auto",
           padding: "0 clamp(0.5rem, 2vw, 1rem)",
 
         }}
@@ -126,6 +133,7 @@ export default function InsightsTab({ data = [], filters, onSegmentSelect }) {
           minHeight: "clamp(300px, 50vh, 400px)",
           width: "100%",
           maxWidth: "clamp(300px, 95vw, 1200px)",
+          
         }}
       >
         {activeSubtab === "putCall" && (
@@ -147,6 +155,15 @@ export default function InsightsTab({ data = [], filters, onSegmentSelect }) {
         {activeSubtab === "topVolume" && (
           <TopVolume
             data={data}
+            filters={filters}
+            onSegmentSelect={handleSegmentSelect}
+          />
+        )}
+
+        {activeSubtab === "marketExposure" && (
+          <MarketExposure
+            data={data}
+            chains={chains}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
           />

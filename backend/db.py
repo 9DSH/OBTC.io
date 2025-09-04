@@ -1,6 +1,6 @@
 ## db.py
 import logging
-from sqlalchemy import Column, Integer, Float, String, Date, DateTime, create_engine
+from sqlalchemy import Column, Integer, Float, String, Date, DateTime, create_engine, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import DB_URI
@@ -14,7 +14,7 @@ Base = declarative_base()
 class OptionChain(Base):
     __tablename__ = 'option_chains'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    Instrument = Column(String, unique=True, index=True, nullable=False)  # instrument name like BTC-29JUN25-96000-C
+    Instrument = Column(String, index=True, nullable=False)  # instrument name like BTC-29JUN25-96000-C
     Option_Type = Column(String)
     Strike_Price = Column(Float)
     Expiration_Date = Column(Date)
@@ -32,6 +32,10 @@ class OptionChain(Base):
     Monetary_Volume = Column(Float)
     Probability_Percent = Column(Float)
     Timestamp = Column(DateTime)
+
+    __table_args__ = (
+        UniqueConstraint("Instrument", "Timestamp", name="uix_instrument_timestamp"),
+    )
 
 class PublicTrade(Base):
     __tablename__ = 'public_trades'
@@ -66,16 +70,3 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialized.")
 
-def get_latest_option_chains(limit=5):
-    session = SessionLocal()
-    try:
-        return session.query(OptionChain).order_by(OptionChain.timestamp.desc()).limit(limit).all()
-    finally:
-        session.close()
-
-def get_latest_public_trades(limit=5):
-    session = SessionLocal()
-    try:
-        return session.query(PublicTrade).order_by(PublicTrade.entry_date.desc()).limit(limit).all()
-    finally:
-        session.close()

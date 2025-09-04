@@ -14,19 +14,27 @@ const HeatmapChart = ({
   xAxisFormat = "number",
   xAxisTitle = "",
   yAxisTitle = "",
-  selectedDayIndex = 0, // index of the day to plot for heat mode
+  selectedDayIndex = 0,
+  minPrice = 1000,
+  maxPrice = 400000,
+  onMinPriceChange,
+  onMaxPriceChange,
 }) => {
   const canvasRef = useRef();
   const wrapperRef = useRef();
   const animationFrameIdRef = useRef(null);
   const animationStartTimeRef = useRef(null);
-
   const [size, setSize] = useState({ width: 300, height: 200 });
-  const [drawProgress, setDrawProgress] = useState(1); // fully drawn
+  const [drawProgress, setDrawProgress] = useState(1);
   const [tooltip, setTooltip] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startMin, setStartMin] = useState(0);
+  const [startMax, setStartMax] = useState(0);
+  const [cursor, setCursor] = useState("default");
 
   const margin = { top: 40, right: 40, bottom: 70, left: 20 };
-  const animationDuration = 400; // ms
+  const animationDuration = 400;
 
   // Resize observer
   useEffect(() => {
@@ -85,8 +93,8 @@ const HeatmapChart = ({
     const plotWidth = w - margin.left - margin.right;
     const plotHeight = h - margin.top - margin.bottom;
 
-    const xMin = Math.min(...xLabels);
-    const xMax = Math.max(...xLabels);
+    const xMin = minPrice;
+    const xMax = maxPrice;
     const rows = data.length;
     const cols = xLabels.length;
     const cellWidth = (plotWidth - (cols - 1) * xGap) / cols;
@@ -158,9 +166,11 @@ const HeatmapChart = ({
     xAxisFormat,
     xAxisTitle,
     selectedDayIndex,
+    minPrice,
+    maxPrice,
   ]);
 
-  // Tooltip
+  // Tooltip and interaction
   const handleMouseMove = (e) => {
     if (!data.length || !xLabels.length) return;
 
@@ -168,6 +178,18 @@ const HeatmapChart = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    // Update cursor based on mouse position
+    if (dragging) {
+      setCursor("col-resize"); // Maintain col-resize during X-axis dragging
+    } else if (x >= margin.left && y > size.height - margin.bottom) {
+      setCursor("col-resize"); // X-axis area (bottom margin)
+    } else if (x < margin.left && y >= margin.top && y <= size.height - margin.bottom) {
+      setCursor("row-resize"); // Y-axis area (left margin)
+    } else {
+      setCursor("default"); // Plot area or outside
+    }
+
+    // Tooltip logic
     const w = size.width;
     const h = size.height;
     const plotWidth = w - margin.left - margin.right;
@@ -193,7 +215,7 @@ const HeatmapChart = ({
       row < rows
     ) {
       const strikeFormatted =
-        xAxisFormat === "k" ? (xLabels[col] / 1000) + "k" : xLabels[col];
+        xAxisFormat === "k" ? (xLabels[col] / 1000).toFixed(2) + "k" : xLabels[col];
       const profitFormatted = formatNumberKM(data[row][col]);
       setTooltip({
         x: 15,
@@ -204,21 +226,89 @@ const HeatmapChart = ({
     } else {
       setTooltip(null);
     }
+
+    // Dragging logic
+    if (dragging) {
+      const delta = e.clientX - startX;
+      const chartWidth = wrapperRef.current.getBoundingClientRect().width;
+      const range = startMax - startMin;
+      const shift = (delta / chartWidth) * range * -1;
+      let newMin = startMin + shift;
+      let newMax = startMax + shift;
+      newMin = Math.max(1000, Math.min(newMin, 400000 - range));
+      newMax = Math.min(400000, Math.max(newMax, 1000 + range));
+      if (newMin < newMax) {
+        onMinPriceChange(newMin);
+        onMaxPriceChange(newMax);
+      }
+    }
   };
 
-  const handleMouseLeave = () => setTooltip(null);
+  const handleMouseDown = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    if (mouseX >= margin.left && mouseY > size.height - margin.bottom) {
+      setDragging(true);
+      setStartX(e.clientX);
+      setStartMin(minPrice);
+      setStartMax(maxPrice);
+      setCursor("col-resize");
+    }
+  };
+
+  const handleMouseUp = () => {
+    setDragging(false);
+    setCursor("default");
+  };
+
+  const handleMouseLeave = () => {
+    setTooltip(null);
+    setDragging(false);
+    setCursor("default");
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    if (mouseX >= margin.left && mouseY > size.height - margin.bottom) {
+      const chartWidth = rect.width;
+      const currentRange = maxPrice - minPrice;
+      const fraction = mouseX / chartWidth;
+      const pos = minPrice + fraction * currentRange;
+      const factor = e.deltaY > 0 ? 1.1 : 0.9;
+      const newRange = currentRange * factor;
+      const minRange = 1000;
+      const maxRange = 400000 - 1000;
+      const clampedNewRange = Math.max(minRange, Math.min(newRange, maxRange));
+      let newMin = pos - fraction * clampedNewRange;
+      let newMax = pos + (1 - fraction) * clampedNewRange;
+      newMin = Math.max(1000, newMin);
+      newMax = Math.min(400000, newMax);
+      if (newMin < newMax) {
+        onMinPriceChange(newMin);
+        onMaxPriceChange(newMax);
+      }
+    }
+  };
 
   return (
     <div
       ref={wrapperRef}
       style={{
         width,
-        height: 'clamp(180px, 20vh,190px)',
+        height: 'clamp(180px, 20vh, 190px)',
         position: "relative",
         userSelect: "none",
+        cursor,
       }}
+      onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
+      onWheel={handleWheel}
     >
       <canvas ref={canvasRef} style={{ display: "block" }} />
       {tooltip && (
@@ -235,7 +325,7 @@ const HeatmapChart = ({
         >
           <div
             style={{
-              width: "90px",
+              width: "100px",
               color: "#ccc",
               padding: "2px 4px",
               fontSize: "clamp(9px, 0.7vw, 11px)",

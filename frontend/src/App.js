@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route,  Navigate } from 'react-router-dom';
 import MarketWatch from './components/MarketWatch';
 import TradeDashboard from './components/TradeDashboard';
 import MainMenu from './components/MainMenu';
@@ -51,15 +51,19 @@ export default function App() {
     }
   };
 
-  // Initial load and intervals
   useEffect(() => {
     const loadData = async () => {
       try {
-        await Promise.all([fetchTrades(), fetchChains(), fetchAnalytics(), fetchBtcPrice()]);
+        await Promise.all([
+          fetchTrades(),
+          fetchChains(),
+          fetchAnalytics(),
+          fetchBtcPrice(),
+        ]);
       } catch (err) {
-        console.error('Error loading data:', err);
+        console.error("Error loading data:", err);
       } finally {
-        setLoading(false);
+        setLoading(false); // Data ready
       }
     };
 
@@ -77,14 +81,6 @@ export default function App() {
       clearInterval(analyticsInterval);
     };
   }, []);
-
-  // Log chains only when they update
-  useEffect(() => {
-    if (chains.length > 0) {
-      console.log('App.js: chains updated', chains[0]);
-    }
-  }, [chains]);
-
   return (
     <BrowserRouter>
       <div
@@ -100,20 +96,21 @@ export default function App() {
       >
         <MainMenu loading={loading} />
 
-        {!loading ? (
+        {!loading && (
           <Routes>
             <Route
               path="/market-watch"
               element={
                 <MarketWatch
                   trades={trades}
+                  chains={chains}
                   loading={loading}
                   analytics={analytics}
                   analyticsLoading={false}
                   btcprice={btcprice}
                   priceLoading={false}
                   onSimulate={(segmentData) => {
-                    console.log('App.js: received simulate data:', segmentData);
+                    console.log("App.js: received simulate data:", segmentData);  // ✅ confirm
                     setSimulateData(segmentData);
                   }}
                 />
@@ -137,10 +134,6 @@ export default function App() {
             {/* Redirect all unknown paths to Market Watch */}
             <Route path="*" element={<Navigate to="/market-watch" replace />} />
           </Routes>
-        ) : (
-          <div style={{ textAlign: 'center' , justifyContent: 'center', marginTop: '50px', fontSize: '18px' }}>
-            Loading data...
-          </div>
         )}
       </div>
     </BrowserRouter>

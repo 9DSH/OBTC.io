@@ -33,13 +33,22 @@ export const processSimulateData = (simulateData, tabs, openedTabs, chains, btcP
   }
 
   let comboID = simulateData.comboID;
+
+  // fallback to first trade's Combo_ID
   if (!comboID && simulateData.trades[0]?.Combo_ID) {
     comboID = simulateData.trades[0].Combo_ID;
     console.log(`Using Combo_ID from trade as comboID: ${comboID}`);
   }
-
-  if (!comboID || typeof comboID !== 'string') {
-    console.warn('Invalid or missing comboID in simulateData:', simulateData);
+  
+  // fallback to first trade's Trade_ID if comboID is still missing
+  if (!comboID && simulateData.trades[0]?.Trade_ID) {
+    comboID = simulateData.trades[0].Trade_ID.toString();
+    console.log(`Combo_ID missing, using first trade's Trade_ID as comboID: ${comboID}`);
+  }
+  
+  // final check
+  if (!comboID) {
+    console.warn('No valid comboID or Trade_ID found in simulateData:', simulateData);
     return false;
   }
 

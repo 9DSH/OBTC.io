@@ -53,7 +53,20 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
   const [popoverAnchors, setPopoverAnchors] = useState({});
   const lastProcessedData = useRef(null);
   
-  console.log("simulation chain: :", chains[0]|| "empty");
+  useEffect(() => {
+    if (chains && chains.length > 0) {
+      console.log("Total chains:", chains.length);
+  
+      // First 3 chains
+      console.log("First 3 chains (heads):", chains.slice(0, 3));
+  
+      // Last 3 chains
+      console.log("Last 3 chains (tails):", chains.slice(-3));
+    } else {
+      console.log("No chains data available.");
+    }
+  }, [chains]);
+  
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs, openedTabs, activeTabId }));
   }, [tabs, openedTabs, activeTabId]);
@@ -313,7 +326,7 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
                   popoverAnchors={popoverAnchors}
                   availableExpirations={availableExpirations}
                 />
-              ) : <div style={styles.noDataContainer}>No tabs open</div>}
+              ) : <div style={styles.noDataContainer}>Open an empty tab first then add trades from the left panel</div>}
             </div>
           </div>
           <div style={styles.chartContainer}>

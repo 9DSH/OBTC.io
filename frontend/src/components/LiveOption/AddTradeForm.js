@@ -224,6 +224,7 @@ export default function AddTradeForm({
             }}
             placeholder="Amount"
             min="0.1"
+            step={0.1}
             style={styles.numberInput}
             disabled={disabled}
           />

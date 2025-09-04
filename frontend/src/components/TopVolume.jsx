@@ -132,6 +132,45 @@ function HeatmapLegend({ minValue, maxValue, height, scale, activeRange, onLegen
   );
 }
 
+// Separate container for the dropdown
+function DropdownContainer({ yAxisMode, setYAxisMode, height }) {
+  return (
+    <div style={{
+      width: 'clamp(10px, 7vw, 120px)',
+      minWidth: 20,
+      background: 'rgba(43, 42, 42, 0.29)',
+      borderRadius: "10px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      paddingTop: 8,
+      flexShrink: 0,
+      height: height,
+    }}>
+      <select
+        value={yAxisMode}
+        onChange={e => setYAxisMode(e.target.value)}
+        style={{
+          width: "90%",
+          background: '#2a2a34',
+          color: 'white',
+          border: '1px solid var(--color-background-bar)',
+          padding: 6,
+          fontSize: 'clamp(0.4rem, 1vw, 0.6rem)',
+          fontFamily: "'Roboto',sans-serif",
+          borderRadius: 4,
+          marginBottom: '1rem',
+        }}
+      >
+        <option value="Expiration Date">Expiration Date</option>
+        <option value="Strike Price">BTC Price</option>
+      </select>
+    </div>
+  );
+}
+
+
 // MAIN TOPVOLUME WRAPPER:
 export default function TopVolume(props) {
   const [yAxisMode, setYAxisMode] = useState('Expiration Date');
@@ -173,49 +212,24 @@ export default function TopVolume(props) {
       minHeight: MIN_HEIGHT,
       overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', 
-                   flexDirection: 'row', 
-                   background: 'transparent', 
-                   width: '100%', 
-                   height: '100%' }}>
-        {/* Dropdown container */}
-        <div style={{
-                    width: 'clamp(10px, 7vw, 120px)',
-                    minWidth: 20,
-                    background: 'var(--color-background-bar',
-                    borderRadius: "10px 0 0 10px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    paddingTop: 8,
-                    flexShrink: 0,
-                  }}>
-          <select
-            value={yAxisMode}
-            onChange={e => setYAxisMode(e.target.value)}
-            style={{
-                    width: "90%",
-                    background: '#2a2a34',
-                    color: 'white',
-                    border: '1px solid var(--color-background-bar',
-                    padding: 6,
-                    fontSize: 'clamp(0.4rem, 1vw, 0.6rem)',
-                    fontFamily: "'Roboto',sans-serif",
-                    borderRadius: 4,
-                    marginBottom: '1rem',
-            }}
-          >
-            <option value="Expiration Date">Expiration Date</option>
-            <option value="Strike Price">BTC Price</option>
-          </select>
-        </div>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        background: 'transparent',
+        width: '100%',
+        height: '100%'
+      }}>
+        {/* Separate dropdown container on the left */}
+        <DropdownContainer yAxisMode={yAxisMode} setYAxisMode={setYAxisMode} height={props.maxHeight || MIN_HEIGHT} />
 
         {/* Chart container */}
-        <div style={{ flexGrow: 1, 
-                      position: 'relative', 
-                      overflow: 'hidden', 
-                      borderRadius: '0' }}>
+        <div style={{
+          flexGrow: 1,
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: '0',
+          marginLeft: '10px',
+        }}>
           {yAxisMode === "Strike Price"
             ? <StrikePriceGrid {...props} expirationYLabelsCount={expirationYLabelsCount} activeLegendRange={activeLegendRange} />
             : <ExpirationGrid {...props} maxYLabels={expirationYLabelsCount} activeLegendRange={activeLegendRange} />}
@@ -663,17 +677,19 @@ function HeatmapCore({
         width: wrapperWidth,
         height: wrapperHeight,
         position: 'relative',
-        borderRadius: '0 10px 10px 0',
+        borderRadius: '10px',
         overflow: 'hidden',
         background: 'rgba(43, 42, 42, 0.29)',
       }}>
       <div
         style={{
           position: 'absolute',
-          left: 0, top: 0,
+          left: 0,
+           top: 0,
           width: scaledYAxisWidth,
           height: canvasHeight,
           zIndex: 2,
+          
         }}
       >
         {fixedYLabels.map((lbl, i) => {

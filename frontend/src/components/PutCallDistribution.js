@@ -261,6 +261,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
         margin: "0 auto",
         position: "relative",
         fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+
       }}
     >
       {/* Chart container */}
@@ -271,6 +272,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
           height: MAX_BAR_HEIGHT + 40,
           position: "relative",
           minWidth: "100%", // use full width of containerRef
+          
         }}
       >
         {/* Y Axis Title */}
@@ -283,6 +285,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
             justifyContent: "center",
             marginRight: 2,
             userSelect: "none",
+            
           }}
         >
           <div

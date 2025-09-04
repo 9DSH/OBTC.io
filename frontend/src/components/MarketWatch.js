@@ -12,6 +12,7 @@ import AccountBar from './AccountBar';
 import TechnicalBar from './TechnicalBar';
 
 export default function MarketWatch({ trades, 
+                                      chains,
                                          loading , 
                                          analytics, 
                                          analyticsLoading, 
@@ -119,6 +120,7 @@ function handleSegmentSelect(event) {
         return (
           <InsightsTab
             data={trades}
+            chains={chains}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
           />
@@ -166,7 +168,7 @@ function handleSegmentSelect(event) {
                        fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
     
                    }}> 
-        v1.0.3
+        v1.0.4
      </div>
 
       {/* Technical Bar */}

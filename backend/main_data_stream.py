@@ -2,7 +2,7 @@ import asyncio
 import logging
 from deribit_client import DeribitClient
 from config import DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET
-from db import init_db, get_latest_option_chains, get_latest_public_trades
+from db import init_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

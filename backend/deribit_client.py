@@ -159,11 +159,13 @@ class DeribitClient:
             session = SessionLocal()
             count = 0
             try:
+                # Remove expired option chains
+                self.remove_expired_option_chains_from_db(session)
+
                 for inst, ob in zip(instruments, order_books):
                     if not ob:
                         continue
                     expiration = datetime.utcfromtimestamp(inst['expiration_timestamp'] / 1000).date()
-                    existing = session.query(OptionChain).filter_by(Instrument=inst['instrument_name']).first()
 
                     instrument_name = inst['instrument_name']
                     probability = prob_dict.get(instrument_name, 0.0)
@@ -189,11 +191,8 @@ class DeribitClient:
                         "Timestamp": datetime.utcnow()
                     }
 
-                    if existing:
-                        for k, v in data.items():
-                            setattr(existing, k, v)
-                    else:
-                        session.add(OptionChain(**data))
+                    session.add(OptionChain(**data))
+
 
                     count += 1
 
@@ -329,6 +328,43 @@ class DeribitClient:
 
         await asyncio.get_running_loop().run_in_executor(self.executor, db_save)
         
+    def remove_expired_option_chains_from_db(self, session):
+        """
+        Remove expired option chains from OptionChain DB.
+        Similar to remove_expired_trades_from_db but for option chains.
+        """
+        now = datetime.utcnow()
+        today = now.date()
+        cleanup_time = time(8, 0)  # 08:00 UTC
+
+        # Determine the intended cycle date
+        if now.hour >= 8:
+            this_cycle = today
+        else:
+            this_cycle = today - timedelta(days=1)
+
+        # Check last cleanup
+        meta = session.query(SystemState).filter_by(key="last_option_chain_cleanup").first()
+        already_cleaned = (meta.value_date == this_cycle) if meta else False
+
+        if not already_cleaned and now >= datetime.combine(this_cycle, cleanup_time):
+            # Delete expired option chains
+            cutoff_datetime = datetime.combine(this_cycle, datetime.min.time())
+            num_deleted = session.query(OptionChain) \
+                .filter(OptionChain.Expiration_Date < cutoff_datetime) \
+                .delete(synchronize_session=False)
+            logger.info(f"Removed {num_deleted} expired option chains from DB.")
+
+            # Update state in DB
+            if meta:
+                meta.value_date = this_cycle
+            else:
+                meta = SystemState(key="last_option_chain_cleanup", value_date=this_cycle)
+                session.add(meta)
+            session.commit()
+        else:
+            logger.debug(f"No cleanup needed for option chains: already cleaned for {this_cycle} or not time yet.")
+
 
     def remove_expired_trades_from_db(self, session):
         now = datetime.utcnow()
