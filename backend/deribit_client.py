@@ -113,9 +113,15 @@ class DeribitClient:
             return
 
         async with aiohttp.ClientSession() as session_http:
-            order_books = await asyncio.gather(*[
-                self.fetch_order_book(session_http, inst['instrument_name']) for inst in instruments
-            ])
+            order_books = []
+            chunk_size = 20  # Batch size to comply with 20/s rate limit (with burst allowance)
+            for i in range(0, len(instruments), chunk_size):
+                chunk = instruments[i:i + chunk_size]
+                chunk_tasks = [self.fetch_order_book(session_http, inst['instrument_name']) for inst in chunk]
+                chunk_results = await asyncio.gather(*chunk_tasks)
+                order_books.extend(chunk_results)
+                if i + chunk_size < len(instruments):
+                    await asyncio.sleep(1)  # Sleep 1 second between batches to average ~20 requests/s
 
         # Prepare data for probability calculation
         options_data = []
@@ -269,9 +275,15 @@ class DeribitClient:
         end_ts = int(end.timestamp() * 1000)
 
         async with aiohttp.ClientSession() as session_http:
-            all_trades = await asyncio.gather(*[
-                self.fetch_public_trades_for_instrument(session_http, inst, start_ts, end_ts) for inst in instruments
-            ])
+            all_trades = []
+            chunk_size = 20  # Batch size to comply with 20/s rate limit (with burst allowance)
+            for i in range(0, len(instruments), chunk_size):
+                chunk = instruments[i:i + chunk_size]
+                chunk_tasks = [self.fetch_public_trades_for_instrument(session_http, inst, start_ts, end_ts) for inst in chunk]
+                chunk_results = await asyncio.gather(*chunk_tasks)
+                all_trades.extend(chunk_results)
+                if i + chunk_size < len(instruments):
+                    await asyncio.sleep(1)  # Sleep 1 second between batches to average ~20 requests/s
 
         def db_save():
             session = SessionLocal()

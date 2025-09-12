@@ -168,7 +168,7 @@ function handleSegmentSelect(event) {
                        fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
     
                    }}> 
-        v1.0.4
+        v1.0.45
      </div>
 
       {/* Technical Bar */}
