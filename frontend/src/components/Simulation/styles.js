@@ -131,7 +131,7 @@ export const styles = {
   },
   // ---------------- Add Position -----------------------
   addBarContainer: {
-    width: 'clamp(120px,12vw,180px)',
+    width: 'clamp(120px,13vw,200px)',
     display: 'flex',
     flexDirection: 'column',
     gap: 'clamp(8px, 1.5vw,10px)',
@@ -204,7 +204,7 @@ export const styles = {
     backgroundColor: 'var(--color-background)',
     color: 'var(--color-text-light)',
     border: '1px solid #444',
-    borderRadius: '5px',
+    borderRadius: '4px',
     fontSize: 'clamp(0.6rem,0.6vw,0.7rem)',
     cursor: 'pointer',
     display: 'flex',
@@ -282,6 +282,7 @@ export const styles = {
   },
   checkbox: {
     cursor: 'pointer',
+    accentColor: 'var(--color-primary)',
   },
   cellSelect: {
     width: '100%',
@@ -310,11 +311,11 @@ export const styles = {
     margin: '0 auto',
   },
   cellButton: {
-    padding: 'clamp(4px, 0.4vw,6px) clamp(8px, 0.9vw,12px)',
+    padding: 'clamp(4px, 0.3vw,5px) clamp(8px, 0.9vw,11px)',
     backgroundColor: 'var(--color-background)',
     color: 'var(--color-text-light)',
     border: '1px solid #333',
-    borderRadius: '6px',
+    borderRadius: '4px',
     fontFamily: "'Roboto', sans-serif",
     fontSize: 'clamp(0.6rem,0.6vw,0.7rem)',
     cursor: 'pointer',
@@ -344,6 +345,5 @@ export const styles = {
     borderRadius: '10px',
     border: '1px solid var(--color-border)',
     padding: '10px',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
   },
 };

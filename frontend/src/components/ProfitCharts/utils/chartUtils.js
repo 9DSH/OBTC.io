@@ -1,5 +1,3 @@
-// src/components/ProfitCharts/utils/chartUtils.js
-// utils/chartUtils.js
 export function getHeatColor(value) {
   // value is between -1 and 1 (normalized)
   // Positive = green blend, Negative = red blend
@@ -31,7 +29,10 @@ export function getHeatColor(value) {
 }
 
 // Helper function to format numbers as k or M without decimals
-export function formatNumberKM(value) {
+export function formatNumberKM(value, isK = false) {
+  if (isK) {
+    return `${(value / 1000).toFixed(2)}k`;
+  }
   const absValue = Math.abs(value);
   if (absValue >= 1000000) {
     return `${Math.round(value / 1000000)}M`;
@@ -41,6 +42,40 @@ export function formatNumberKM(value) {
   return `${Math.round(value)}`;
 }
 
+// Utility function to interpolate between two HSL colors using the shortest path
+export const interpolateHSL = (color1, color2, factor) => {
+  let h1 = color1[0];
+  let h2 = color2[0];
+  const s1 = color1[1];
+  const s2 = color2[1];
+  const l1 = color1[2];
+  const l2 = color2[2];
+
+  // Adjust hues to [0, 360)
+  h1 = (h1 % 360 + 360) % 360;
+  h2 = (h2 % 360 + 360) % 360;
+
+  // Calculate the shortest delta
+  let deltaH = h2 - h1;
+  if (deltaH > 180) deltaH -= 360;
+  if (deltaH < -180) deltaH += 360;
+
+  let h = h1 + factor * deltaH;
+  if (h < 0) h += 360;
+  if (h >= 360) h -= 360;
+
+  const s = s1 + factor * (s2 - s1);
+  const l = l1 + factor * (l2 - l1);
+
+  return `hsl(${h}, ${s}%, ${l}%)`;
+};
+
+// Utility function to calculate gradient factor based on date
+export const getGradientFactor = (lineDate, startDate, endDate) => {
+  const totalTime = endDate.getTime() - startDate.getTime();
+  const elapsedTime = lineDate.getTime() - startDate.getTime();
+  return Math.min(Math.max(elapsedTime / totalTime, 0), 1);
+};
 
 export function drawAxes(
   mode,
@@ -56,9 +91,9 @@ export function drawAxes(
   yAxisTitle = "",
   yLabels = null,
   animationProgress = 1,
-  selectedLine = null, // {x:[], y:[], name:?} for both line & heat
+  selectedLine = null,
   margin,
-  hoveredPoint = null // NEW: {x, y} when hovering selected line
+  hoveredPoint = null
 ) {
   ctx.strokeStyle = "#666"; 
   ctx.fillStyle = "#666";
@@ -106,7 +141,7 @@ export function drawAxes(
 
     if (breakevens.length > 0) {
       ctx.save();
-      ctx.strokeStyle =  "rgb(102, 102, 102)";
+      ctx.strokeStyle = "rgb(102, 102, 102)";
       ctx.fillStyle = "rgb(152, 152, 152)";
       ctx.font = "clamp(9px, 0.7vw, 11px)";
       ctx.setLineDash([5,5]);
@@ -148,13 +183,13 @@ export function drawAxes(
   }
 
   // X-axis title
-  // X-axis title
   if(xAxisTitle && mode !== "heat"){
     ctx.textAlign = "center";
     const yPos = h - margin.bottom/3;
     ctx.fillText(xAxisTitle, margin.left+(w-margin.left-margin.right)/2, yPos);
   }
- // Y-axis ticks and labels
+
+  // Y-axis ticks and labels
   if (yLabels) {
     // For HeatmapChart
     const rows = yLabels.length;
@@ -167,18 +202,15 @@ export function drawAxes(
   } else {
     // For LineChartCanvas
     const yRange = yMax - yMin;
-    const yTickCount = Math.max(5, Math.floor((h - 50) / 50)); // ~1 tick per 50px, min 5
+    const yTickCount = Math.max(5, Math.floor((h - 50) / 50));
     const yTickStep = yRange / yTickCount;
     for (let i = 0; i <= yTickCount; i++) {
       const yVal = yMin + i * yTickStep;
-
       const y = h - margin.bottom - (i * (h - margin.top - margin.bottom)) / yTickCount;
-
       ctx.beginPath();
       ctx.moveTo(margin.left - 5, y);
       ctx.lineTo(margin.left, y);
       ctx.stroke();
-
       ctx.textAlign = "right";
       ctx.fillText(formatNumberKM(yVal), margin.left - 10, y + 4);
     }
@@ -227,7 +259,6 @@ export function drawAxes(
   ctx.globalAlpha = 1;
 }
 
-
 export function drawLines(
   ctx,
   lines,
@@ -240,9 +271,13 @@ export function drawLines(
   hoveredLine = null,
   animationProgress = 1,
   margin,
-  selectedLine = null, // NEW: selected line index
-  hoveredPointCallback = null // NEW: callback to report hovered point
+  selectedLine = null,
+  hoveredPointCallback = null,
+  today,
+  expirationDate
 ) {
+  ctx.save();
+
   const scaleX = (x) =>
     margin.left +
     ((x - xMin) / (xMax - xMin)) * (w - margin.left - margin.right);
@@ -251,15 +286,68 @@ export function drawLines(
     margin.bottom -
     ((y - yMin) / (yMax - yMin)) * (h - margin.top - margin.bottom);
 
-  const targetLines =
-    selectedLine !== null ? [lines[selectedLine]] : lines;
+  // Define colors for gradient (HSL format: hue, saturation, lightness)
+  const redHSL = [370, 100, 35];   // Red
+  const middleHSL = [310, 100, 40]; // Middle (Cyan/Blue)
+  const purpleHSL = [270, 100, 45]; // Purple
+
+  const interpolateHSL = (c1, c2, t) => {
+    const h = c1[0] + (c2[0] - c1[0]) * t;
+    const s = c1[1] + (c2[1] - c1[1]) * t;
+    const l = c1[2] + (c2[2] - c1[2]) * t;
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  };
+
+  const getThreeColorGradient = (factor) => {
+    if (factor < 0.5) {
+      // Scale factor into [0,1] range for red → middle
+      return interpolateHSL(redHSL, middleHSL, factor / 0.5);
+    } else {
+      // Scale factor into [0,1] range for middle → purple
+      return interpolateHSL(middleHSL, purpleHSL, (factor - 0.5) / 0.5);
+    }
+  };
+
+  const targetLines = selectedLine !== null ? [lines[selectedLine]] : lines;
 
   targetLines.forEach((line, index) => {
-    ctx.beginPath();
-    ctx.strokeStyle = line.color || "blue";
+    const realIndex = selectedLine !== null ? selectedLine : index;
 
-    const isHovered =
-      selectedLine === null && hoveredLine === index;
+    // Determine line color based on date or index
+    let factor;
+    if (line.date && today && expirationDate) {
+      try {
+        const lineDate = new Date(line.date);
+        if (!isNaN(lineDate.getTime())) {
+          if (lineDate < today) {
+            factor = 0; // Red for dates before today
+          } else if (lineDate > expirationDate) {
+            factor = 1; // Purple for dates after expiration
+          } else {
+            factor = getGradientFactor(lineDate, today, expirationDate);
+          }
+        } else {
+          console.warn(`Invalid date for line ${line.name}: ${line.date}, using index-based gradient`);
+          factor = lines.length > 1 ? realIndex / (lines.length - 1) : 0;
+        }
+      } catch (e) {
+        console.warn(`Date parsing error for line ${line.name}: ${e}, using index-based gradient`);
+        factor = lines.length > 1 ? realIndex / (lines.length - 1) : 0;
+      }
+    } else {
+      // Fallback to index-based gradient if no date or invalid date range
+      factor = lines.length > 1 ? realIndex / (lines.length - 1) : 0;
+    }
+
+    const strokeStyle = getThreeColorGradient(factor);
+
+    // Draw the line
+    ctx.beginPath();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineCap = "round"; 
+    ctx.lineJoin = "round"; 
+
+    const isHovered = selectedLine === null && hoveredLine === realIndex;
     ctx.lineWidth = isHovered
       ? 3
       : selectedLine !== null
@@ -271,7 +359,7 @@ export function drawLines(
     ctx.globalAlpha =
       selectedLine !== null
         ? 1
-        : hoveredLine !== null && hoveredLine !== index
+        : hoveredLine !== null && hoveredLine !== realIndex
         ? 0.3
         : animationProgress;
 
@@ -282,16 +370,31 @@ export function drawLines(
       if (i === 0) ctx.moveTo(xp, yp);
       else ctx.lineTo(xp, yp);
 
-      if(selectedLine !== null && hoveredLine === null && hoveredPointCallback){
-        hoveredPointCallback({x: x, y: line.y[i]}); // report hovered point
+      if (selectedLine !== null && hoveredLine === null && hoveredPointCallback) {
+        hoveredPointCallback({ x: x, y: line.y[i], day: line.name });
       }
     });
 
     ctx.stroke();
+
+    // Draw points for selected line as markers
+    if (selectedLine === realIndex && line.x.length > 0) {
+      ctx.save();
+      ctx.fillStyle = strokeStyle;
+      line.x.slice(0, pointCount).forEach((x, i) => {
+        const xp = scaleX(x);
+        const yp = scaleY(line.y[i]);
+        ctx.beginPath();
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
     ctx.globalAlpha = 1;
   });
-}
 
+  ctx.restore();
+}
 
 
 export function getTooltipPosition(x, y, canvasWidth, canvasHeight) {

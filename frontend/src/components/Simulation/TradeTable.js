@@ -18,7 +18,7 @@ export default function TradeTable({
   setAnchorForRow,
   popoverAnchors,
   availableExpirations,
-  btcPrice, // <- pass current BTC price from parent
+  btcPrice,
 }) {
   // inject defaults into every trade before rendering
   const tradesWithDefaults = selectedOptions.map((option, index) => {
@@ -35,8 +35,6 @@ export default function TradeTable({
     const ivFromChain = chain ? (isBuy ? chain.Ask_IV : chain.Bid_IV) : 0;
     const defaultUnderlying = btcPrice?.btcprice || 60000;
   
-
-  
     return {
       ...option,
       price: priceFromChain,
@@ -51,10 +49,10 @@ export default function TradeTable({
         <thead>
           <tr style={styles.tableRowContainer}>
             <th style={styles.tableHeader}>Select</th>
-            <th style={styles.tableHeader}>Exp. Date</th>
-            <th style={styles.tableHeader}>Strike Price</th>
-            <th style={styles.tableHeader}>Type</th>
             <th style={styles.tableHeader}>Side</th>
+            <th style={styles.tableHeader}>Type</th>
+            <th style={styles.tableHeader}>Strike Price</th>
+            <th style={styles.tableHeader}>Exp. Date</th>
             <th style={styles.tableHeader}>Size</th>
             <th style={styles.tableHeader}>Price (USD)</th>
             <th style={styles.tableHeader}>IV (%)</th>
@@ -81,6 +79,10 @@ export default function TradeTable({
                       .sort((a, b) => a - b)
                   : [];
 
+              const sideBackgroundColor = option.side?.toLowerCase() === 'buy'
+                ? 'rgba(14, 107, 44, 0.81)'
+                : 'rgba(151, 34, 23, 0.61)';
+
               return (
                 <tr key={index} style={styles.tableRowContainer}>
                   <td style={styles.tableCell}>
@@ -91,6 +93,124 @@ export default function TradeTable({
                       style={styles.checkbox}
                       className="checkbox"
                     />
+                  </td>
+                   {/* Side */}
+                  <td style={styles.tableCell}>
+                    <button
+                      onClick={() =>
+                        handleEditTrade(index, 'side', option.side)
+                      }
+                      style={{
+                        ...styles.cellButton,
+                        backgroundColor: sideBackgroundColor,
+                        color: 'white',
+                      }}
+                    >
+                      {option.side}
+                    </button>
+                  </td>
+                  <td style={styles.tableCell}>
+                    <button
+                      onClick={() =>
+                        handleEditTrade(index, 'type', option.type)
+                      }
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          'var(--color-input-bg)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          'var(--color-background)';
+                      }}
+                      style={{
+                        ...styles.cellButton,
+                        backgroundColor: 'var(--color-background)',
+                        color: 'white',
+                      }}
+                    >
+                      {option.type}
+                    </button>
+                  </td>
+                  <td style={styles.tableCell}>
+                    <Button
+                      variant="outlined"
+                      onClick={(e) =>
+                        setAnchorForRow(index, 'strike', e.currentTarget)
+                      }
+                      disabled={!option.expiration_date || rowStrikes.length === 0}
+                      style={{
+                        height: 'clamp(20px, 2.5vh, 25px)',
+                        width: '100%',
+                        fontSize: 'clamp(0.58rem,0.6vw,0.7rem)',
+                        color: 'white',
+                        borderColor: '#444',
+                        backgroundColor: 'var(--color-background)',
+                        textTransform: 'none',
+                        padding: '6px',
+                      }}
+                      aria-label="Select strike price"
+                    >
+                      {option.strike_price
+                        ? formatStrikeLabel(option.strike_price)
+                        : 'Select'}
+                    </Button>
+                    <Popover
+                      open={Boolean(popoverAnchors[`${index}-strike`])}
+                      anchorEl={popoverAnchors[`${index}-strike`]}
+                      onClose={() => setAnchorForRow(index, 'strike', null)}
+                      anchorOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'center',
+                      }}
+                      transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          maxHeight: '200px',
+                          width: '100%',
+                          overflow: 'auto',
+                          backgroundColor: 'transparent',
+                          textAlign: 'center',
+                          borderRadius: '0 0 10px 10px',
+                          border: '1px solid #444',
+                        }}
+                      >
+                        <Table stickyHeader size="small">
+                          <TableBody>
+                            {rowStrikes.map((s) => (
+                              <TableRow key={s}>
+                                <TableCell
+                                  onClick={() => {
+                                    console.log(
+                                      `Editing strike price for trade ${index} to ${s}`
+                                    );
+                                    handleEditTrade(
+                                      index,
+                                      'strike_price',
+                                      s
+                                    );
+                                    setAnchorForRow(index, 'strike', null);
+                                  }}
+                                  style={{
+                                    cursor: 'pointer',
+                                    fontSize:
+                                      'clamp(0.6rem,0.6vw,0.7rem)',
+                                    color: 'white',
+                                    textAlign: 'center',
+                                    backgroundColor: 'transparent',
+                                  }}
+                                >
+                                  {formatStrikeLabel(s)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </Popover>
                   </td>
                   <td style={styles.tableCell}>
                     <Button
@@ -175,123 +295,6 @@ export default function TradeTable({
                         </Table>
                       </div>
                     </Popover>
-                  </td>
-                  <td style={styles.tableCell}>
-                    <Button
-                      variant="outlined"
-                      onClick={(e) =>
-                        setAnchorForRow(index, 'strike', e.currentTarget)
-                      }
-                      disabled={!option.expiration_date || rowStrikes.length === 0}
-                      style={{
-                        height: 'clamp(20px, 2.5vh, 25px)',
-                        width: '100%',
-                        fontSize: 'clamp(0.58rem,0.6vw,0.7rem)',
-                        color: 'white',
-                        borderColor: '#444',
-                        backgroundColor: 'var(--color-background)',
-                        textTransform: 'none',
-                        padding: '6px',
-                      }}
-                      aria-label="Select strike price"
-                    >
-                      {option.strike_price
-                        ? formatStrikeLabel(option.strike_price)
-                        : 'Select'}
-                    </Button>
-                    <Popover
-                      open={Boolean(popoverAnchors[`${index}-strike`])}
-                      anchorEl={popoverAnchors[`${index}-strike`]}
-                      onClose={() => setAnchorForRow(index, 'strike', null)}
-                      anchorOrigin={{
-                        vertical: 'bottom',
-                        horizontal: 'center',
-                      }}
-                      transformOrigin={{
-                        vertical: 'top',
-                        horizontal: 'center',
-                      }}
-                    >
-                      <div
-                        style={{
-                          maxHeight: '200px',
-                          width: '100%',
-                          overflow: 'auto',
-                          backgroundColor: 'transparent',
-                          textAlign: 'center',
-                          borderRadius: '0 0 10px 10px',
-                          border: '1px solid #444',
-                        }}
-                      >
-                        <Table stickyHeader size="small">
-                          <TableBody>
-                            {rowStrikes.map((s) => (
-                              <TableRow key={s}>
-                                <TableCell
-                                  onClick={() => {
-                                    console.log(
-                                      `Editing strike price for trade ${index} to ${s}`
-                                    );
-                                    handleEditTrade(
-                                      index,
-                                      'strike_price',
-                                      s
-                                    );
-                                    setAnchorForRow(index, 'strike', null);
-                                  }}
-                                  style={{
-                                    cursor: 'pointer',
-                                    fontSize:
-                                      'clamp(0.6rem,0.6vw,0.7rem)',
-                                    color: 'white',
-                                    textAlign: 'center',
-                                    backgroundColor: 'transparent',
-                                  }}
-                                >
-                                  {formatStrikeLabel(s)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </Popover>
-                  </td>
-                  <td style={styles.tableCell}>
-                    <button
-                      onClick={() =>
-                        handleEditTrade(index, 'type', option.type)
-                      }
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          'var(--color-input-bg)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          'var(--color-background)';
-                      }}
-                      style={styles.cellButton}
-                    >
-                      {option.type}
-                    </button>
-                  </td>
-                  <td style={styles.tableCell}>
-                    <button
-                      onClick={() =>
-                        handleEditTrade(index, 'side', option.side)
-                      }
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          'var(--color-input-bg)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          'var(--color-background)';
-                      }}
-                      style={styles.cellButton}
-                    >
-                      {option.side}
-                    </button>
                   </td>
                   <td style={styles.tableCell}>
                     <input

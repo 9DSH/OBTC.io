@@ -265,80 +265,99 @@ class DeribitClient:
             return None, None, None
 
     async def fetch_and_store_public_trades(self):
-        session = SessionLocal()
-        instruments = [i.Instrument for i in session.query(OptionChain.Instrument).all()]
-        session.close()
-
-        end = datetime.utcnow()
-        start = end - timedelta(hours=24)
-        start_ts = int(start.timestamp() * 1000)
-        end_ts = int(end.timestamp() * 1000)
-
-        async with aiohttp.ClientSession() as session_http:
-            all_trades = []
-            chunk_size = 20  # Batch size to comply with 20/s rate limit (with burst allowance)
-            for i in range(0, len(instruments), chunk_size):
-                chunk = instruments[i:i + chunk_size]
-                chunk_tasks = [self.fetch_public_trades_for_instrument(session_http, inst, start_ts, end_ts) for inst in chunk]
-                chunk_results = await asyncio.gather(*chunk_tasks)
-                all_trades.extend(chunk_results)
-                if i + chunk_size < len(instruments):
-                    await asyncio.sleep(1)  # Sleep 1 second between batches to average ~20 requests/s
-
-        def db_save():
+        try:
+            logger.info("Starting public trades fetch and store cycle.")
             session = SessionLocal()
-            count = 0
-            try:
-                self.remove_expired_trades_from_db(session)
-                for trades in all_trades:
-                    for t in trades:
-                        try:
-                            trade_id = str(t['trade_id'])
-                            if session.query(PublicTrade).filter_by(Trade_ID=trade_id).first():
-                                continue
+            
+            instruments = [i.Instrument for i in session.query(OptionChain.Instrument).all()]
+            session.close()
 
+            end = datetime.utcnow()
+            start = end - timedelta(hours=24)
+            start_ts = int(start.timestamp() * 1000)
+            end_ts = int(end.timestamp() * 1000)
+
+            async with aiohttp.ClientSession() as session_http:
+                all_trades = []
+                chunk_size = 20
+                for i in range(0, len(instruments), chunk_size):
+                    chunk = instruments[i:i + chunk_size]
+                    chunk_tasks = [self.fetch_public_trades_for_instrument(session_http, inst, start_ts, end_ts) for inst in chunk]
+                    chunk_results = await asyncio.gather(*chunk_tasks)
+                    all_trades.extend(chunk_results)
+                    if i + chunk_size < len(instruments):
+                        await asyncio.sleep(1)
+
+            def db_save():
+                session = SessionLocal()
+                count = 0
+                
+                try:
+                    self.remove_expired_trades_from_db(session)
+                    
+                    all_trades_flat = [trade for trades_list in all_trades for trade in trades_list]
+                    
+                    unique_trades_map = {str(t['trade_id']): t for t in all_trades_flat if 'trade_id' in t}
+                    
+                    trades_to_add = []
+                    for trade_id, t in unique_trades_map.items():
+                        try:
+                            if session.query(PublicTrade).filter_by(Trade_ID=trade_id).first():
+                                logger.debug(f"Skipping trade with ID {trade_id}: already exists in DB.")
+                                continue
+    
                             expiration_date, strike_price, option_type = self.parse_instrument_metadata(t.get('instrument_name'))
-                            
+                            if not expiration_date:
+                                logger.warning(f"Skipping trade with ID {trade_id}: could not parse instrument metadata.")
+                                continue
+                                
                             raw_block_id = ','.join(t.get('block_trade_id', [])) if 'block_trade_id' in t else None
                             raw_combo_id = ','.join(t.get('combo_trade_id', [])) if 'combo_trade_id' in t else None
-                            cleaned_block_id = self.clean_trade_id(raw_block_id)
-                            cleaned_combo_id = self.clean_trade_id(raw_combo_id)
-
+                            
                             new_trade = PublicTrade(
                                 Trade_ID=trade_id,
                                 Side=t.get('direction'),
                                 Instrument=t.get('instrument_name'),
                                 Price_BTC=t.get('price'),
-                                Price_USD=t.get('price') * t.get('index_price'),
+                                Price_USD=t.get('price') * t.get('index_price') if t.get('price') and t.get('index_price') else 0.0,
                                 IV_Percent=t.get('iv'),
                                 Size=t.get('amount'),
-                                Entry_Value=t['amount'] * t['price'] * t['index_price'],
+                                Entry_Value=t['amount'] * t['price'] * t['index_price'] if t.get('amount') and t.get('price') and t.get('index_price') else 0.0,
                                 Underlying_Price=t.get('index_price'),
                                 Expiration_Date=expiration_date,
                                 Strike_Price=strike_price,
                                 Option_Type=option_type,
                                 Entry_Date=datetime.utcfromtimestamp(t['timestamp'] / 1000),
-                                BlockTrade_IDs=cleaned_block_id,
+                                BlockTrade_IDs=self.clean_trade_id(raw_block_id),
                                 BlockTrade_Count=len(t.get('block_trade_id', [])) if 'block_trade_id' in t else None,
                                 Combo_ID=t.get('combo_id'),
-                                ComboTrade_IDs=cleaned_combo_id,
+                                ComboTrade_IDs=self.clean_trade_id(raw_combo_id),
                             )
-                            session.add(new_trade)
+                            trades_to_add.append(new_trade)
                             count += 1
-                        except IntegrityError:
-                            session.rollback()
-                        except Exception as e:
-                            logger.error(f"Error saving trade {t.get('trade_id')}: {e}")
-                            session.rollback()
-                session.commit()
-                logger.info(f"Saved {count} public trades.")
-            except Exception as e:
-                logger.error(f"Error saving public trades: {e}")
-                session.rollback()
-            finally:
-                session.close()
+                        except (KeyError, TypeError, ValueError) as e:
+                            logger.error(f"Data processing error for trade {trade_id}: {e}. Skipping this trade.")
+                            continue
+    
+                    if trades_to_add:
+                        session.add_all(trades_to_add)
+                        session.commit()
+                        logger.info(f"Saved {len(trades_to_add)} public trades.")
+                    else:
+                        logger.info("No new public trades to save.")
+    
+                except Exception as e:
+                    logger.error(f"A broader error occurred during public trades save: {e}")
+                    session.rollback()
+                finally:
+                    session.close()
 
-        await asyncio.get_running_loop().run_in_executor(self.executor, db_save)
+            await asyncio.get_running_loop().run_in_executor(self.executor, db_save)
+            
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in the main fetch_and_store_public_trades function: {e}")
+
+
         
     def remove_expired_option_chains_from_db(self, session):
         """

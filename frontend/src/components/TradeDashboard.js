@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 
 import AccountBar from './AccountBar';
 import TechnicalBar from './TechnicalBar';
-import LiveOptionTab from './LiveOption/LiveOptionTab'
-import SimulationTab from './LiveOption/SimulationTab'
+import LiveOptionTab from './Simulation/LiveOptionTab'
+import SimulationTab from './Simulation/SimulationTab'
 import TabsBar from './TabsBar';
 
 export default function TradeDashboard({ 

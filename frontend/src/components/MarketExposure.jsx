@@ -8,7 +8,7 @@ import { Chart as ChartJS,
          Legend, 
          LineElement, 
          PointElement,
-         LineController, } from 'chart.js';
+         LineController } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, LineElement, PointElement, LineController);
@@ -16,7 +16,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 const COLORS = {
   Call: 'green',
   Put: 'darkred',
-  NDE: 'gold'
+  NDE: 'gold',
+  NGE: 'rgb(37, 134, 132)',
 };
 
 const MAX_WIDTH = 1200;
@@ -54,7 +55,7 @@ const parseInstrument = (instrument) => {
   
   const months = {
     JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
-    JUL: '07', AUG: '08', 'SEP': '09', 'OCT': '10', NOV: '11', DEC: '12'
+    JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
   };
   
   const month = months[monthAbbr];
@@ -76,6 +77,10 @@ const parseInstrument = (instrument) => {
 };
 
 const calculate_oi_change = (chains, timeframe) => {
+  if (!Array.isArray(chains)) {
+    console.error("Error: 'chains' is not an array in calculate_oi_change.", { received: chains });
+    return { oiChanges: [], dateRange: null };
+  }
   let effectiveStartDate = null;
   let effectiveEndDate = null;
   const oiChanges = [];
@@ -113,7 +118,7 @@ const calculate_oi_change = (chains, timeframe) => {
       relevantRecords = instrumentRecords.filter(rec => new Date(rec.Timestamp) >= startDateThreshold);
       
       if (relevantRecords.length < 2) {
-          relevantRecords = instrumentRecords;
+        relevantRecords = instrumentRecords;
       }
     }
     
@@ -145,65 +150,163 @@ const calculate_oi_change = (chains, timeframe) => {
 };
 
 const calculate_trades_nde_change = (trades, chains, timeframe) => {
-    const ndeChanges = new Map();
+  if (!Array.isArray(trades) || !Array.isArray(chains)) {
+    console.error("Error: 'trades' or 'chains' is not an array in calculate_trades_nde_change.");
+    return [];
+  }
+  const ndeChanges = new Map();
+  
+  const latestDeltas = new Map();
+  chains.forEach(chain => {
+    if (!latestDeltas.has(chain.Instrument) || new Date(chain.Timestamp) > new Date(latestDeltas.get(chain.Instrument).Timestamp)) {
+      latestDeltas.set(chain.Instrument, chain);
+    }
+  });
+
+  const now = new Date();
+  let startDateThreshold = new Date(now);
+  startDateThreshold.setHours(0, 0, 0, 0);
+
+  switch (timeframe) {
+    case '1': startDateThreshold.setDate(startDateThreshold.getDate() - 1); break;
+    case '2': startDateThreshold.setDate(startDateThreshold.getDate() - 2); break;
+    case '3': startDateThreshold.setDate(startDateThreshold.getDate() - 3); break;
+    case '4': startDateThreshold.setDate(startDateThreshold.getDate() - 4); break;
+    case '5': startDateThreshold.setDate(startDateThreshold.getDate() - 5); break;
+    case '6': startDateThreshold.setDate(startDateThreshold.getDate() - 6); break;
+    case '7': startDateThreshold.setDate(startDateThreshold.getDate() - 7); break;
+    case 'today': default: break;
+  }
+  
+  const relevantTrades = timeframe === 'all' 
+    ? trades
+    : trades.filter(trade => new Date(trade.Entry_Date) >= startDateThreshold);
+
+  relevantTrades.forEach(trade => {
+    const contractSize = trade.Size;
+    const instrumentKey = trade.Instrument;
+    const side = trade.Side;
+
+    const latestChainData = latestDeltas.get(instrumentKey);
     
-    const latestDeltas = new Map();
-    chains.forEach(chain => {
-        if (!latestDeltas.has(chain.Instrument) || new Date(chain.Timestamp) > new Date(latestDeltas.get(chain.Instrument).Timestamp)) {
-            latestDeltas.set(chain.Instrument, chain);
-        }
-    });
+    if (!latestChainData || latestChainData.Delta === undefined) {
+      return;
+    }
 
-    const now = new Date();
-    let startDateThreshold = new Date(now);
-    startDateThreshold.setHours(0, 0, 0, 0);
+    const delta = latestChainData.Delta;
+    let nde_change_amount = 0;
 
-    switch (timeframe) {
-        case '1': startDateThreshold.setDate(startDateThreshold.getDate() - 1); break;
-        case '2': startDateThreshold.setDate(startDateThreshold.getDate() - 2); break;
-        case '3': startDateThreshold.setDate(startDateThreshold.getDate() - 3); break;
-        case '4': startDateThreshold.setDate(startDateThreshold.getDate() - 4); break;
-        case '5': startDateThreshold.setDate(startDateThreshold.getDate() - 5); break;
-        case '6': startDateThreshold.setDate(startDateThreshold.getDate() - 6); break;
-        case '7': startDateThreshold.setDate(startDateThreshold.getDate() - 7); break;
-        case 'today': default: break;
+    if (side === 'BUY') {
+      nde_change_amount = -contractSize * delta;
+    } else if (side === 'SELL') {
+      nde_change_amount = contractSize * delta;
+    }
+
+    if (!ndeChanges.has(instrumentKey)) {
+      ndeChanges.set(instrumentKey, 0);
+    }
+    ndeChanges.set(instrumentKey, ndeChanges.get(instrumentKey) + nde_change_amount);
+  });
+  
+  return Array.from(ndeChanges, ([Instrument, nde_change]) => ({
+    Instrument,
+    nde_change
+  }));
+};
+
+const calculate_nge_change = (trades, chains, timeframe) => {
+  if (!Array.isArray(trades) || !Array.isArray(chains)) {
+    return [];
+  }
+  const ngeChanges = new Map();
+  
+  const chainDataByInstrument = new Map();
+  chains.forEach(chain => {
+    if (!chainDataByInstrument.has(chain.Instrument)) {
+      chainDataByInstrument.set(chain.Instrument, []);
+    }
+    chainDataByInstrument.get(chain.Instrument).push(chain);
+  });
+
+  const now = new Date();
+  let startDateThreshold = new Date(now);
+  startDateThreshold.setHours(0, 0, 0, 0);
+
+  switch (timeframe) {
+    case '1': startDateThreshold.setDate(startDateThreshold.getDate() - 1); break;
+    case '2': startDateThreshold.setDate(startDateThreshold.getDate() - 2); break;
+    case '3': startDateThreshold.setDate(startDateThreshold.getDate() - 3); break;
+    case '4': startDateThreshold.setDate(startDateThreshold.getDate() - 4); break;
+    case '5': startDateThreshold.setDate(startDateThreshold.getDate() - 5); break;
+    case '6': startDateThreshold.setDate(startDateThreshold.getDate() - 6); break;
+    case '7': startDateThreshold.setDate(startDateThreshold.getDate() - 7); break;
+    case 'today': default: break;
+  }
+
+  const relevantTrades = timeframe === 'all' 
+    ? trades 
+    : trades.filter(trade => new Date(trade.Entry_Date) >= startDateThreshold);
+
+  relevantTrades.forEach(trade => {
+    const instrumentKey = trade.Instrument;
+    const tradeSize = trade.Size;
+    const tradeSide = trade.Side;
+
+    const instrumentRecords = chainDataByInstrument.get(instrumentKey);
+    
+    if (!instrumentRecords || instrumentRecords.length < 2) {
+      return;
+    }
+
+    const sortedRecords = instrumentRecords.sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+    const startRecord = sortedRecords[0];
+    const latestRecord = sortedRecords[sortedRecords.length - 1];
+    
+    if (trade.Underlying_Price === undefined || startRecord.Gamma === undefined || latestRecord.Gamma === undefined) {
+      return;
+    }
+
+    const gamma_start = startRecord.Gamma;
+    const gamma_end = latestRecord.Gamma;
+    const underlyingPrice = trade.Underlying_Price;
+
+    const nge_start = gamma_start * tradeSize * underlyingPrice;
+    const nge_end = gamma_end * tradeSize * underlyingPrice;
+    let nge_change_amount = nge_end - nge_start;
+
+    if (tradeSide === 'SELL') {
+      nge_change_amount *= -1;
     }
     
-    const relevantTrades = timeframe === 'all' 
-      ? trades
-      : trades.filter(trade => new Date(trade.Entry_Date) >= startDateThreshold);
+    if (Number.isFinite(nge_change_amount)) {
+      if (!ngeChanges.has(instrumentKey)) {
+        ngeChanges.set(instrumentKey, 0);
+      }
+      ngeChanges.set(instrumentKey, ngeChanges.get(instrumentKey) + nge_change_amount);
+    }
+  });
 
-    relevantTrades.forEach(trade => {
-        const contractSize = trade.Size;
-        const instrumentKey = trade.Instrument;
-        const side = trade.Side;
+  return Array.from(ngeChanges, ([Instrument, nge_change]) => ({
+    Instrument,
+    nge_change
+  }));
+};
 
-        const latestChainData = latestDeltas.get(instrumentKey);
-        
-        if (!latestChainData || latestChainData.Delta === undefined) {
-            console.warn(`Skipping trade for instrument ${instrumentKey}: Delta not found in chains data.`);
-            return;
-        }
-
-        const delta = latestChainData.Delta;
-        let nde_change_amount = 0;
-
-        if (side === 'BUY') {
-            nde_change_amount = -contractSize * delta;
-        } else if (side === 'SELL') {
-            nde_change_amount = contractSize * delta;
-        }
-
-        if (!ndeChanges.has(instrumentKey)) {
-            ndeChanges.set(instrumentKey, 0);
-        }
-        ndeChanges.set(instrumentKey, ndeChanges.get(instrumentKey) + nde_change_amount);
-    });
-
-    return Array.from(ndeChanges, ([Instrument, nde_change]) => ({
-        Instrument,
-        nde_change
-    }));
+const getRGBA = (color, opacity) => {
+  const tempElement = document.createElement('div');
+  tempElement.style.color = color;
+  document.body.appendChild(tempElement);
+  const computedColor = getComputedStyle(tempElement).color;
+  document.body.removeChild(tempElement);
+  
+  const match = computedColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (match) {
+    const [, r, g, b] = match;
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+  
+  console.warn(`Could not parse color: ${color}. Falling back to transparent.`);
+  return `rgba(0, 0, 0, 0)`; 
 };
 
 // Custom tooltip rendering function
@@ -229,8 +332,6 @@ const customTooltip = (context) => {
 
   const title = tooltipModel.title[0] || '';
   const bodyLines = tooltipModel.body.map(b => b.lines).flat();
-  const datasets = context.chart.data.datasets;
-
 
   const tooltipContent = document.createElement('div');
   tooltipContent.style.backgroundColor = '#2a2a34';
@@ -246,8 +347,7 @@ const customTooltip = (context) => {
     titleDiv.style.borderRadius = '10px 10px 0 0';
     titleDiv.style.padding = '7px 8px';
     titleDiv.style.fontSize = '12px';
-    titleDiv.style.padding = '7px 8px';
-    titleDiv.style.letterSpacing=  '1px';
+    titleDiv.style.letterSpacing = '1px';
     titleDiv.style.fontWeight = 600;
     titleDiv.style.color = 'rgb(188, 188, 188)';
     titleDiv.textContent = title;
@@ -268,6 +368,8 @@ const customTooltip = (context) => {
       color = COLORS.Call;
     } else if (line.includes('Net Delta Exposure')) {
       color = COLORS.NDE;
+    } else if (line.includes('Net Gamma Exposure')) {
+      color = COLORS.NGE;
     }
 
     if (color) {
@@ -291,16 +393,14 @@ const customTooltip = (context) => {
 
   const { offsetLeft: positionX, offsetTop: positionY } = context.chart.canvas;
   tooltipEl.style.opacity = '1';
-  tooltipEl.style.left = positionX + tooltipModel.caretX + 'px';
+  tooltipEl.style.left = positionX + tooltipModel.caretX + 20+ 'px';
   tooltipEl.style.top = positionY + tooltipModel.caretY + 'px';
 };
 
-export default function MarketExposure({ data = [], chains = [], filters = {} }) {
+export default function MarketExposure({ data = [], chains = [], filters = {}, onSegmentSelect }) {
   const [timeframe, setTimeframe] = useState('7');
   const [dateRange, setDateRange] = useState(null);
   const [chartMode, setChartMode] = useState('strikePrice');
-  // New state to track the hovered bar index
-  const [hoveredIndex, setHoveredIndex] = useState(null);
 
   useEffect(() => {
     if (chains && chains.length > 0) {
@@ -311,8 +411,8 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
     }
   }, [chains]);
 
-  const { chartData, maxAbsOI, labels, dynamicStepSize, maxAbsNDE, originalNdeData } = useMemo(() => {
-    if (chains.length === 0 && data.length === 0) {
+  const { chartData, maxAbsOI, labels, dynamicStepSize, maxAbsNDE, maxAbsNGE, originalNdeData, originalNgeData } = useMemo(() => {
+    if (!Array.isArray(chains) || (chains.length === 0 && data.length === 0)) {
       setDateRange(null);
       return {
         chartData: { labels: [], datasets: [] },
@@ -320,7 +420,9 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
         labels: [],
         dynamicStepSize: 50,
         maxAbsNDE: 0,
-        originalNdeData: []
+        maxAbsNGE: 0,
+        originalNdeData: [],
+        originalNgeData: []
       };
     }
 
@@ -330,8 +432,9 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
     setDateRange(oiDateRange);
 
     const ndeChanges = calculate_trades_nde_change(data, chains, timeframe);
+    const ngeChanges = calculate_nge_change(data, chains, timeframe);
 
-    const combinedData = [...oiChanges, ...ndeChanges];
+    const combinedData = [...oiChanges, ...ndeChanges, ...ngeChanges];
     const filteredData = combinedData
       .map(item => {
         const parsed = parseInstrument(item.Instrument);
@@ -355,6 +458,7 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
 
     const oiMap = new Map();
     const ndeMap = new Map();
+    const ngeMap = new Map();
     filteredData.forEach(item => {
       const groupKey = chartMode === 'strikePrice' ? item.Strike_Price : item.Expiration_Date_Filter;
       
@@ -375,47 +479,70 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
         }
         ndeMap.set(groupKey, ndeMap.get(groupKey) + item.nde_change);
       }
+      
+      if (item.nge_change !== undefined) {
+        if (!ngeMap.has(groupKey)) {
+          ngeMap.set(groupKey, 0);
+        }
+        ngeMap.set(groupKey, ngeMap.get(groupKey) + item.nge_change);
+      }
     });
 
     let chartLabels;
     if (chartMode === 'strikePrice') {
-        chartLabels = Array.from(new Set([...Array.from(oiMap.keys()), ...Array.from(ndeMap.keys())])).sort((a, b) => a - b).map(p => p / 1000 + 'k');
+      chartLabels = Array.from(new Set([...Array.from(oiMap.keys()), ...Array.from(ndeMap.keys()), ...Array.from(ngeMap.keys())]))
+        .sort((a, b) => a - b)
+        .map(p => p / 1000 + 'k');
     } else {
-        chartLabels = Array.from(new Set([...Array.from(oiMap.keys()), ...Array.from(ndeMap.keys())])).sort();
+      chartLabels = Array.from(new Set([...Array.from(oiMap.keys()), ...Array.from(ndeMap.keys()), ...Array.from(ngeMap.keys())])).sort();
     }
     
     const callData = chartLabels.map(label => {
-        const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
-        return oiMap.get(key)?.Call || 0;
+      const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
+      return oiMap.get(key)?.Call || 0;
     });
     const putData = chartLabels.map(label => {
-        const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
-        return oiMap.get(key)?.Put || 0;
+      const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
+      return oiMap.get(key)?.Put || 0;
     });
     const ndeData = chartLabels.map(label => {
-        const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
-        return ndeMap.get(key) || 0;
+      const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
+      return ndeMap.get(key) || 0;
+    });
+    const ngeData = chartLabels.map(label => {
+      const key = chartMode === 'strikePrice' ? parseInt(label.replace('k', '') * 1000) : label;
+      return ngeMap.get(key) || 0;
     });
 
     let maxTotalOI = 0;
     chartLabels.forEach((label, index) => {
-        const total = Math.abs(callData[index]) + Math.abs(putData[index]);
-        if (total > maxTotalOI) {
-            maxTotalOI = total;
-        }
+      const total = Math.abs(callData[index]) + Math.abs(putData[index]);
+      if (total > maxTotalOI) {
+        maxTotalOI = total;
+      }
     });
     const maxAbsOI = maxTotalOI || 1;
 
     let maxTotalNDE = 0;
     ndeData.forEach(value => {
-        if (Math.abs(value) > maxTotalNDE) {
-            maxTotalNDE = Math.abs(value);
-        }
+      if (Math.abs(value) > maxTotalNDE) {
+        maxTotalNDE = Math.abs(value);
+      }
     });
     const maxAbsNDE = maxTotalNDE || 1;
+    
+    let maxTotalNGE = 0;
+    ngeData.forEach(value => {
+      if (Math.abs(value) > maxTotalNGE) {
+        maxTotalNGE = Math.abs(value);
+      }
+    });
+    const maxAbsNGE = maxTotalNGE || 1;
 
-    const scaleFactor = (maxAbsNDE > 0 && maxAbsOI > 0) ? (maxAbsOI / maxAbsNDE) : 1;
+    const maxAbsGreeks = Math.max(maxAbsNDE, maxAbsNGE);
+    const scaleFactor = (maxAbsGreeks > 0 && maxAbsOI > 0) ? (maxAbsOI / maxAbsGreeks) : 1;
     const normalizedNdeData = ndeData.map(val => val * scaleFactor);
+    const normalizedNgeData = ngeData.map(val => val * scaleFactor);
 
     let calculatedStepSize;
     if (maxAbsOI <= 500) { calculatedStepSize = 100; } 
@@ -428,38 +555,25 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
     if (calculatedStepSize < 50 && maxAbsOI > 0) { calculatedStepSize = 50; }
     calculatedStepSize = Math.ceil(calculatedStepSize / 50) * 50;
     
-    // Determine bar colors based on hover state
-    const barCallColors = callData.map((data, index) => 
-      hoveredIndex === null || hoveredIndex === index 
-        ? COLORS.Call
-        : 'rgba(0, 128, 0, 0.4)'
-    );
-
-    const barPutColors = putData.map((data, index) =>
-      hoveredIndex === null || hoveredIndex === index
-        ? COLORS.Put
-        : 'rgba(139, 0, 0, 0.4)'
-    );
-
     const chartDatasets = [
       {
         label: 'Put',
         data: putData,
-        backgroundColor: barPutColors,
+        backgroundColor: getRGBA(COLORS.Put, 1),
         borderRadius: 5,
         yAxisID: 'y',
-        borderColor: 'black', // keep solid border
-        borderWidth: 1, 
+        borderColor: 'black',
+        borderWidth: 1,
         order: 2,
       },
       {
         label: 'Call',
         data: callData,
-        backgroundColor: barCallColors,
+        backgroundColor: getRGBA(COLORS.Call, 1),
         borderRadius: 5,
         yAxisID: 'y',
-        borderColor: 'black', // keep solid border
-        borderWidth: 1, 
+        borderColor: 'black',
+        borderWidth: 1,
         order: 1,
       },
       {
@@ -474,11 +588,33 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
         borderDash: [1, 2],
         yAxisID: 'y1',
         order: 0,
+      },
+      {
+        label: 'NGE',
+        data: normalizedNgeData,
+        type: 'line',
+        borderColor: COLORS.NGE,
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        pointRadius: 1,
+        pointHoverRadius: 5,
+        borderDash: [1, 2],
+        yAxisID: 'y1',
+        order: -1,
       }
     ];
 
-    return { chartData: { labels: chartLabels, datasets: chartDatasets }, maxAbsOI, labels: chartLabels, dynamicStepSize: calculatedStepSize, maxAbsNDE, originalNdeData: ndeData };
-  }, [data, chains, filters, timeframe, chartMode, hoveredIndex]);
+    return {
+      chartData: { labels: chartLabels, datasets: chartDatasets },
+      maxAbsOI,
+      labels: chartLabels,
+      dynamicStepSize: calculatedStepSize,
+      maxAbsNDE,
+      maxAbsNGE,
+      originalNdeData: ndeData,
+      originalNgeData: ngeData
+    };
+  }, [data, chains, filters, timeframe, chartMode]);
 
   const options = useMemo(() => {
     const yLimit = maxAbsOI * 1.1;
@@ -502,7 +638,7 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
           },
         },
         tooltip: {
-          enabled: false, // Disable default tooltip
+          enabled: false,
           external: customTooltip,
           callbacks: {
             title: (context) => {
@@ -520,6 +656,7 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
               const putMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'Put'));
               const callMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'Call'));
               const ndeMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'NDE'));
+              const ngeMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'NGE'));
       
               if (putMeta && !putMeta.hidden) {
                 const putData = datasets[putMeta.index].data[dataIndex];
@@ -544,35 +681,44 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
                   : ndeData.toFixed(0);
                 lines.push(`Net Delta Exposure: ${formattedNde}`);
               }
+              
+              if (ngeMeta && !ngeMeta.hidden) {
+                const ngeData = originalNgeData[dataIndex];
+                const formattedNge = ngeData >= 1000 || ngeData <= -1000
+                  ? `${(ngeData / 1000).toFixed(1)}k`
+                  : ngeData.toFixed(2);
+                lines.push(`Net Gamma Exposure: ${formattedNge}`);
+              }
       
               return lines;
             },
           },
-
         },
       },
-      // New animation property to speed up easing
       animation: {
-        duration: 300, // This value is in milliseconds. 150 is a fast animation.
-        easing: 'linear', // Use 'linear' for a consistent speed, or other easing functions for different effects
-        properties: ['backgroundColor'] // Apply this animation only to the background color
+        duration: 100,
+        easing: 'linear',
+        properties: ['backgroundColor']
       },
       scales: {
         x: {
           stacked: true,
           grid: { display: false },
-          ticks: { color: '#888', 
-                  font: { size: 11 }, 
-                  autoSkip: true, 
-                  maxTicksLimit: 20 },
+          ticks: {
+            color: '#888',
+            font: { size: 11 },
+            autoSkip: true,
+            maxTicksLimit: 20
+          },
           border: { display: true, color: 'rgba(114, 114, 114, 0.3)' },
-          title: { display: true, 
-                   text: xTitle, 
-                   color: 'rgba(149, 149, 149, 1)', 
-                   font: { size: 12, weight: 500 }, 
-                   fontFamily: "'Roboto',sans-serif",
-                   padding: 4 },
-
+          title: {
+            display: true,
+            text: xTitle,
+            color: 'rgba(149, 149, 149, 1)',
+            font: { size: 12, weight: 500 },
+            fontFamily: "'Roboto',sans-serif",
+            padding: 4
+          },
           barPercentage: 0.9,
           categoryPercentage: 0.8,
         },
@@ -582,24 +728,26 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
           min: -yLimit,
           max: yLimit,
           grid: { display: false },
-          ticks: { 
-            color: '#777', 
-            font: { size: 10 }, 
-            padding: 5, 
+          ticks: {
+            color: '#777',
+            font: { size: 10 },
+            padding: 5,
             callback: (value) => {
-              if (value === 0) { return '0'; }
-              if (Math.abs(value) < 1000) { return value.toFixed(0); }
+              if (value === 0) return '0';
+              if (Math.abs(value) < 1000) return value.toFixed(0);
               return `${(value / 1000).toFixed(1)}k`;
             },
             stepSize: dynamicStepSize
           },
           border: { display: true, color: 'rgba(114, 114, 114, 0.3)' },
-          title: { display: true, 
-                  text: 'OI CHANGE', 
-                  color: 'rgb(149, 149, 149)', 
-                  font: { size: 12, weight: 500 }, 
-                  fontFamily: "'Roboto',sans-serif",
-                  padding: 1 },
+          title: {
+            display: true,
+            text: 'OI CHANGE',
+            color: 'rgb(149, 149, 149)',
+            font: { size: 12, weight: 500 },
+            fontFamily: "'Roboto',sans-serif",
+            padding: 1
+          },
         },
         y1: {
           type: 'linear',
@@ -608,52 +756,158 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
           grid: { display: false },
           min: -yLimit,
           max: yLimit,
-          ticks: { 
-            color: "rgba(251, 255, 0, 0.56)", 
+          ticks: {
+            color: "rgba(251, 255, 0, 0.56)",
             font: { size: 10 },
             fontFamily: "'Roboto',sans-serif",
             padding: 5,
             callback: (value) => {
-                const scaleFactor = (maxAbsOI > 0 && maxAbsNDE > 0) ? (maxAbsOI / maxAbsNDE) : 1;
-                const originalValue = value / scaleFactor;
-                if (Math.abs(originalValue) >= 1000) { 
-                    return `${(originalValue / 1000).toFixed(1)}k`; 
-                }
-                return originalValue.toFixed(0);
+              const maxAbsGreeks = Math.max(maxAbsNDE, maxAbsNGE);
+              const scaleFactor = (maxAbsOI > 0 && maxAbsGreeks > 0) ? (maxAbsOI / maxAbsGreeks) : 1;
+              const originalValue = value / scaleFactor;
+              if (Math.abs(originalValue) >= 1000) {
+                return `${(originalValue / 1000).toFixed(1)}k`;
+              }
+              return originalValue.toFixed(0);
             }
           },
           border: { display: true, color: 'rgba(114, 114, 114, 0.3)' },
-          title: { display: true, 
-                    text: 'NDE CHANGE', 
-                    color: COLORS.NDE, 
-                    font: { size: 12, weight: 500 }, 
-                    fontFamily: "'Roboto',sans-serif",
-                    padding: 1 },
+          title: {
+            display: true,
+            text: 'NDE / NGE',
+            color: COLORS.NDE,
+            font: { size: 12, weight: 500 },
+            fontFamily: "'Roboto',sans-serif",
+            padding: 1
+          },
         },
       },
-      onClick: (event, elements) => {
-        if (elements.length > 0) {
-          const { dataIndex } = elements[0];
-          const groupKey = labels[dataIndex];
-          const barData = chartData.datasets.slice(0, 2).reduce((acc, dataset) => ({ ...acc, [dataset.label]: dataset.data[dataIndex] }), {});
-          const ndeDataPoint = originalNdeData[dataIndex];
-          console.log(`Bar clicked: Group: ${groupKey}, OI Data:`, barData, `NDE Data: ${ndeDataPoint}`);
+      onClick: (event, elements, chart) => {
+        if (elements.length === 0) {
+          console.warn('No elements clicked in chart');
+          return;
         }
+
+        const { datasetIndex, index: dataIndex } = elements[0];
+        
+        // Validate dataIndex
+        if (dataIndex == null || dataIndex < 0 || dataIndex >= chartData.labels.length) {
+          console.warn('Invalid dataIndex:', dataIndex, 'Labels length:', chartData.labels.length, chartData.labels);
+          return;
+        }
+
+        const label = chartData.labels[dataIndex];
+        if (!label) {
+          console.warn('Label is undefined at dataIndex:', dataIndex, chartData.labels);
+          return;
+        }
+
+        const isStrikeMode = chartMode === 'strikePrice';
+        const keyValue = isStrikeMode && typeof label === 'string' ? parseInt(label.replace('k', '') * 1000) : label;
+        const formattedExpirationFilters = filters.Expiration_Date?.map(formatFilterDate) || [];
+
+        // Compute startDateThreshold for trade filtering
+        const now = new Date();
+        let startDateThreshold = new Date(now);
+        startDateThreshold.setHours(0, 0, 0, 0);
+        let applyDateFilter = timeframe !== 'all';
+
+        if (applyDateFilter) {
+          switch (timeframe) {
+            case '1': startDateThreshold.setDate(startDateThreshold.getDate() - 1); break;
+            case '2': startDateThreshold.setDate(startDateThreshold.getDate() - 2); break;
+            case '3': startDateThreshold.setDate(startDateThreshold.getDate() - 3); break;
+            case '4': startDateThreshold.setDate(startDateThreshold.getDate() - 4); break;
+            case '5': startDateThreshold.setDate(startDateThreshold.getDate() - 5); break;
+            case '6': startDateThreshold.setDate(startDateThreshold.getDate() - 6); break;
+            case '7': startDateThreshold.setDate(startDateThreshold.getDate() - 7); break;
+            case 'today': default: break;
+          }
+        }
+
+        const relevantTrades = applyDateFilter
+          ? data.filter(trade => new Date(trade.Entry_Date) >= startDateThreshold)
+          : data;
+
+        // Group trades by Buy Call, Sell Call, Buy Put, Sell Put
+        const groupedData = {
+          'Buy Call': [],
+          'Sell Call': [],
+          'Buy Put': [],
+          'Sell Put': []
+        };
+
+        relevantTrades.forEach(trade => {
+          const parsed = parseInstrument(trade.Instrument);
+          if (!parsed) return;
+          if (filters.Option_Type && parsed.Option_Type !== filters.Option_Type) return;
+
+          let matchesGroup = false;
+          if (isStrikeMode) {
+            if (parsed.Strike_Price === keyValue) matchesGroup = true;
+          } else {
+            if (parsed.Expiration_Date_Filter === keyValue) matchesGroup = true;
+          }
+          if (!matchesGroup) return;
+
+          if (isStrikeMode) {
+            if (formattedExpirationFilters.length > 0 && !formattedExpirationFilters.includes(parsed.Expiration_Date_Filter)) return;
+          } else {
+            if (filters.Strike_Price && filters.Strike_Price.length > 0 && !filters.Strike_Price.includes(parsed.Strike_Price)) return;
+          }
+
+          // Categorize the trade
+          if (parsed.Option_Type === 'Call') {
+            if (trade.Side === 'BUY') {
+              groupedData['Buy Call'].push(trade);
+            } else if (trade.Side === 'SELL') {
+              groupedData['Sell Call'].push(trade);
+            }
+          } else if (parsed.Option_Type === 'Put') {
+            if (trade.Side === 'BUY') {
+              groupedData['Buy Put'].push(trade);
+            } else if (trade.Side === 'SELL') {
+              groupedData['Sell Put'].push(trade);
+            }
+          }
+        });
+
+        const oiData = {
+          Call: chartData.datasets[1].data[dataIndex] || 0,
+          Put: chartData.datasets[0].data[dataIndex] || 0
+        };
+        const ndeDataPoint = originalNdeData[dataIndex] || 0;
+        const ngeDataPoint = originalNgeData[dataIndex] || 0;
+
+        const segmentData = {
+          groupKey: label,
+          oiData,
+          ndeData: ndeDataPoint,
+          ngeData: ngeDataPoint,
+          groupedData,
+          timeframe,
+          chartMode
+        };
+
+        if (onSegmentSelect) {
+          onSegmentSelect({
+            contextId: `insight/marketexposure`,
+            segmentData
+          });
+        }
+        
+        console.log("Bar clicked. Data sent to parent:", segmentData);
       },
       onHover: (event, elements, chart) => {
-        if (elements.length > 0) {
-          const { datasetIndex, index } = elements[0];
-          setHoveredIndex(index);
-        } else {
-          setHoveredIndex(null);
-        }
+        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
       }
     };
-  }, [maxAbsOI, maxAbsNDE, labels, chartData, chartMode, dynamicStepSize, originalNdeData]);
+  }, [maxAbsOI, maxAbsNDE, maxAbsNGE, labels, chartData, chartMode, dynamicStepSize, originalNdeData, originalNgeData, data, filters, timeframe, onSegmentSelect]);
+
   const handleTimeframeChange = (event) => {
     setTimeframe(event.target.value);
   };
-  
+
   const handleChartModeChange = (event) => {
     setChartMode(event.target.value);
   };
@@ -661,12 +915,15 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
   const formattedDateRange = dateRange ? `${formatDateForDisplay(dateRange.start)} - ${formatDateForDisplay(dateRange.end)}` : 'No data available';
 
   return (
-    <div style={{ display: 'flex', 
-                  justifyContent: 'center',
-                   gap: '10px', 
-                   maxWidth: MAX_WIDTH, 
-                   margin: '5px auto',
-                   fontFamily: "'Roboto',sans-serif", }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      gap: '10px',
+      maxWidth: MAX_WIDTH,
+      margin: '5px auto',
+      fontFamily: "'Roboto',sans-serif",
+      
+    }}>
       <div style={{
         flexShrink: 0,
         backgroundColor: 'rgba(43, 42, 42, 0.29)',
@@ -680,24 +937,24 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
         fontFamily: "'Roboto',sans-serif",
         minWidth: '200px'
       }}>
-        <div style={{ display: 'flex', 
-                      flexDirection: 'column' ,
-                      alignContent: 'center',
-                      justifyContent: 'center',
-                      color: '#888',}}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignContent: 'center',
+          justifyContent: 'center',
+          color: '#888',
+          
+        }}>
           <span>Timeframe:</span>
-          <span style={{ color: '#fff', 
-                        fontWeight: 'bold' ,
-                        paddingBottom: '10px',
-                         borderBottom: '1px dotted #444'}}>{formattedDateRange}</span>
+          <span style={{
+            color: '#fff',
+            fontWeight: 'bold',
+            paddingBottom: '10px',
+            borderBottom: '1px dotted #444'
+          }}>{formattedDateRange}</span>
         </div>
-         {/*Timeframe Button */}
-         <div style={{ display: 'flex', flexDirection: 'column', fontFamily: "'Roboto',sans-serif", }}>
-          <label htmlFor="timeframe-select" 
-                 style={{ 
-                  marginBottom: '5px',
-                  color: '#888', }}
-              >
+        <div style={{ display: 'flex', flexDirection: 'column', fontFamily: "'Roboto',sans-serif" }}>
+          <label htmlFor="timeframe-select" style={{ marginBottom: '5px', color: '#888' }}>
             Timeframe:
           </label>
           <select
@@ -707,36 +964,26 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
             style={{
               backgroundColor: '#2a2a34',
               color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 8px',
-              cursor: 'pointer',
-              
-              fontSize: '11px',
-              
+              border: '1px solid #444',
+              borderRadius: '5px',
+              padding: '5px',
+              fontSize: '12px',
             }}
           >
             <option value="today">Today</option>
-            <option value="1">1 day ago</option>
-            <option value="2">2 days ago</option>
-            <option value="3">3 days ago</option>
-            <option value="4">4 days ago</option>
-            <option value="5">5 days ago</option>
-            <option value="6">6 days ago</option>
-            <option value="7">7 days ago</option>
+            <option value="1">1 Day ago</option>
+            <option value="2">2 Days ago</option>
+            <option value="3">3 Days ago</option>
+            <option value="4">4 Days ago</option>
+            <option value="5">5 Days ago</option>
+            <option value="6">6 Days ago</option>
+            <option value="7">7 Days ago</option>
             <option value="all">All Time</option>
           </select>
         </div>
-        
-        {/* mode Button */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <label htmlFor="chart-mode-select" 
-                  style={{ 
-                    marginBottom: '5px',
-                    color: '#888' 
-                    }}
-                >
-                  Mode:
+        <div style={{ display: 'flex', flexDirection: 'column', fontFamily: "'Roboto',sans-serif" }}>
+          <label htmlFor="chart-mode-select" style={{ marginBottom: '5px', color: '#888' }}>
+            Chart Mode:
           </label>
           <select
             id="chart-mode-select"
@@ -745,34 +992,24 @@ export default function MarketExposure({ data = [], chains = [], filters = {} })
             style={{
               backgroundColor: '#2a2a34',
               color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 8px',
-              cursor: 'pointer',
-              fontSize: '11px',
+              border: '1px solid #444',
+              borderRadius: '5px',
+              padding: '5px',
+              fontSize: '12px',
             }}
           >
             <option value="strikePrice">Strike Price</option>
             <option value="expirationDate">Expiration Date</option>
           </select>
         </div>
-
-
       </div>
-      <div style={{
-        backgroundColor: 'rgba(43, 42, 42, 0.29)',
-        borderRadius: '10px',
-        padding: '8px',
-        boxSizing: 'border-box',
-        width: CHART_WIDTH,
-      }}>
-        {chains.length > 0 && labels.length > 0 ? (
-          <Bar options={options} data={chartData} style={{ height: HEIGHT }} />
-        ) : (
-          <div style={{ color: 'white', textAlign: 'center', height: HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            No data to display for the selected timeframe and mode.
-          </div>
-        )}
+      <div style={{ width: CHART_WIDTH, 
+                    height: HEIGHT , 
+                    backgroundColor: 'rgba(43, 42, 42, 0.29)',
+                    borderRadius: '15px',
+                    padding: '10px'
+                    }}>
+        <Bar data={chartData} options={options} />
       </div>
     </div>
   );

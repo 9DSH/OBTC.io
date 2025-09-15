@@ -3,15 +3,15 @@ import AddTradeForm from './AddTradeForm';
 import TradeTable from './TradeTable';
 import ProfitCharts from '../ProfitCharts/ProfitCharts';
 import { styles } from './styles';
-import { updateTradePricing, 
-        getSelectedTrades , 
-        processSimulateData,
-        generateUniqueId
-        } from './utils';
+import { 
+  updateTradePricing, 
+  getSelectedTrades, 
+  processSimulateData,
+  generateUniqueId
+} from './utils';
 
 // Key for localStorage
 const STORAGE_KEY = 'simulationTabsState';
-
 
 export default function SimulationTab({ chains, trades, btcPrice, simulateData }) {
   const savedState = localStorage.getItem(STORAGE_KEY);
@@ -45,6 +45,10 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
       ? btcPrice.btcprice.toFixed(2)
       : '60000.00',
     isSelected: true,
+    delta: '',
+    gamma: '',
+    theta: '',
+    vega: ''
   });
   const [availableExpirations, setAvailableExpirations] = useState([]);
   const [currentInstruments, setCurrentInstruments] = useState([]);
@@ -56,11 +60,7 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
   useEffect(() => {
     if (chains && chains.length > 0) {
       console.log("Total chains:", chains.length);
-  
-      // First 3 chains
       console.log("First 3 chains (heads):", chains.slice(0, 3));
-  
-      // Last 3 chains
       console.log("Last 3 chains (tails):", chains.slice(-3));
     } else {
       console.log("No chains data available.");
@@ -103,7 +103,7 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
 
   useEffect(() => {
     processSimulateData(simulateData, tabs, openedTabs, chains, btcPrice, setTabs, setOpenedTabs, setActiveTabId, setPopoverAnchors, lastProcessedData);
-  }, [simulateData, btcPrice, chains]);
+  }, [simulateData, btcPrice, chains, tabs, openedTabs]);
 
   useEffect(() => {
     return () => {
@@ -185,7 +185,11 @@ export default function SimulationTab({ chains, trades, btcPrice, simulateData }
         price: '',
         iv_percent: '',
         underlying_price: btcPrice && btcPrice.btcprice && !isNaN(btcPrice.btcprice) ? btcPrice.btcprice.toString() : '60000',
-        isSelected: true
+        isSelected: true,
+        delta: '',
+        gamma: '',
+        theta: '',
+        vega: ''
       });
       setCurrentInstruments([]);
     }

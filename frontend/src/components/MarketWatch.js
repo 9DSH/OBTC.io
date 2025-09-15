@@ -49,7 +49,7 @@ export default function MarketWatch({ trades,
 
 
   useEffect(() => {
-    console.log("TradeDashboard: State updated - activeTab:", activeTab,
+    console.log("MarketWatch: State updated - activeTab:", activeTab,
                 "selectedSegment:", selectedSegment,
                   "contextId:", contextId,
                   "selectedSegment_RightSide:", selectedSegment_RightSide,
@@ -168,7 +168,7 @@ function handleSegmentSelect(event) {
                        fontSize: 'clamp(9px, 1vw,10px)', color:"#444"
     
                    }}> 
-        v1.0.45
+        v1.0.5
      </div>
 
       {/* Technical Bar */}

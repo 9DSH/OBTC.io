@@ -25,23 +25,24 @@ export default function DetailsBar({ activeTab,
     const [simulationData, setSimulationData] = useState(null);
     const [followData, setFollowData] = useState(null);
     const [isSimulating, setIsSimulating] = useState(false);
-     const [expandedTradeIds, setExpandedTradeIds] = useState(new Set());
+    const [expandedTradeIds, setExpandedTradeIds] = useState(new Set());
 
     const toggleExpand = () => {
         setIsExpanded(prev => !prev);
     };
 
     useEffect(() => {
-        if (selectedSegment) {
+        console.log("DetailsBar received props:", { activeTab, selectedSegment, contextId, filters });
+        if (selectedSegment && contextId) {
             setIsExpanded(true);
-            // Reset simulation state when selectedSegment changes
             setIsSimulating(false);
         } else {
             setIsExpanded(false);
             setIsSimulating(false);
         }
-    }, [activeTab, selectedSegment]);
-
+    }, [activeTab, selectedSegment, contextId]);
+    
+    
     const styles = {
         wrapper: {
             position: 'fixed',
@@ -163,9 +164,7 @@ export default function DetailsBar({ activeTab,
             height: 'clamp(24px, 2.5vh, 28px)',
             marginBottom: 0,
             flexShrink: 0,
-
             cursor: 'pointer',
-            
         },
         cell: {
             padding: 'clamp(2px, 0.8vw, 3px) clamp(6px, 1vw, 10px)',
@@ -252,7 +251,6 @@ export default function DetailsBar({ activeTab,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             gap: 'clamp(0.3rem, 1.1vw, 2.4rem)',
-            
             marginTop: 'clamp(6px ,1vh,10px)',
         },
         summaryBlocktrade: {
@@ -279,8 +277,8 @@ export default function DetailsBar({ activeTab,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            display: 'flex', // Add display flex
-            justifyContent: 'space-between', // Space out columns
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
         },
         cardIconHeader: {
@@ -313,34 +311,29 @@ export default function DetailsBar({ activeTab,
             display: 'flex',
             flexDirection: 'column',
             gap: '4px',
-            
             height: 'clamp(24px, 2.5vh, 28px)',
-          },
-          expandedDetailRow: {
-            display: 'flex',
+        },
+        expandedDetailRow: {
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
             justifyItems: 'center',
             alignItems: 'center',
             backgroundColor: 'rgba(46, 46, 74, 0.64)',
             borderRadius: 'clamp(1px, 0.8vw, 3px)',
-            
-          },
-          expandedDetailValue: {
+        },
+        expandedDetailValue: {
             color: '#ddd',
-          },
-          tradeCardHover: {
-            backgroundColor: '#2e2e2e', 
-
+        },
+        tradeCardHover: {
+            backgroundColor: '#2e2e2e',
         },
         expirationRow: {
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)', // default for 3 items
+            gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '6px',
-            borderRadius: ' 0 0  6px 6px',
+            borderRadius: '0 0 6px 6px',
             backgroundColor: '#333',
         },
-        
         expirationCell: {
             fontSize: 'clamp(0.6rem, 2vw, 0.7rem)',
             fontWeight: 400,
@@ -349,9 +342,7 @@ export default function DetailsBar({ activeTab,
             padding: '4px 6px',
             borderRadius: '6px',
             backgroundColor: 'var(--color-background-secondary)',
-            
         }
-        
     };
 
     const STRATEGY_COLORS = {
@@ -360,6 +351,7 @@ export default function DetailsBar({ activeTab,
         "SELL Call": { background: "rgba(199, 119, 6, 0.95)", text: "rgb(255, 255, 255)" },
         "BUY Put": { background: "rgba(24, 118, 54, 0.69)", text: "rgb(255, 255, 255)" },
     };
+
     const renderTradeCard = (trade, idx) => {
         const side = (trade.Side || '').trim();
         const type = (trade.Option_Type || '').trim();
@@ -368,7 +360,7 @@ export default function DetailsBar({ activeTab,
           background: '#e0e0e0',
           text: '#000',
         };
-        const tradeId = trade.Trade_ID || `${idx}`; // Using idx as a fallback for a unique ID
+        const tradeId = trade.Trade_ID || `${idx}`;
         const isExpandedTrade = expandedTradeIds.has(tradeId);
       
         const handleClick = () => {
@@ -447,8 +439,8 @@ export default function DetailsBar({ activeTab,
                     </CustomTooltip>
                   </span>
                   <span style={styles.expandedDetailValue}>
-                    <CustomTooltip content={`Pirce(USD): ${trade.Price_USD != null && !isNaN(trade.Price_USD )
-                        ? `${Number(trade.Price_USD ).toFixed(1)} USD`
+                    <CustomTooltip content={`Price(USD): ${trade.Price_USD != null && !isNaN(trade.Price_USD)
+                        ? `${Number(trade.Price_USD).toFixed(1)} USD`
                         : 'N/A'}`}>
                       {trade.Price_USD != null && !isNaN(trade.Price_USD)
                         ? `${Number(trade.Price_USD).toFixed(1)}`
@@ -464,52 +456,48 @@ export default function DetailsBar({ activeTab,
                         : 'N/A'}
                     </CustomTooltip>
                   </span>
-
                 </div>
               </div>
             )}
           </div>
         );
-      };
+    };
 
-// ------------- Simulation / Follow Button-----------------
     const renderLiveTradeButtons = () => {
         const summary = selectedSegment?.trades ? getTradeSummary(selectedSegment.trades)[0] : null;
     
         if (!summary) {
-        return null;
+            return null;
         }
     
         return (
-        <div style={styles.cardIconHeader}>
-            <CustomTooltip content={isSimulating ? "This strategy is already in simulation" : "Simulation"}>
-            <img
-                src={isSimulating ? "/simulate_active.png" : "/simulate.png"}
-                alt="Simulate"
-                style={styles.simulateIconButton}
-                onClick={() => {
-                if (!isSimulating) {
-                    console.log("Simulate clicked – full selectedSegment:", selectedSegment);
-                    onSimulate(selectedSegment);
-                    setIsSimulating(true);
-                }
-                }}
-            />
-            </CustomTooltip>
-    
-            <CustomTooltip content="Follow">
-            <img
-                src="/follow.png"
-                alt="Follow"
-                style={styles.followIconButton}
-                onClick={() => setFollowData(summary)}
-            />
-            </CustomTooltip>
-        </div>
+            <div style={styles.cardIconHeader}>
+                <CustomTooltip content={isSimulating ? "This strategy is already in simulation" : "Simulation"}>
+                    <img
+                        src={isSimulating ? "/simulate_active.png" : "/simulate.png"}
+                        alt="Simulate"
+                        style={styles.simulateIconButton}
+                        onClick={() => {
+                            if (!isSimulating) {
+                                console.log("Simulate clicked – full selectedSegment:", selectedSegment);
+                                onSimulate(selectedSegment);
+                                setIsSimulating(true);
+                            }
+                        }}
+                    />
+                </CustomTooltip>
+                <CustomTooltip content="Follow">
+                    <img
+                        src="/follow.png"
+                        alt="Follow"
+                        style={styles.followIconButton}
+                        onClick={() => setFollowData(summary)}
+                    />
+                </CustomTooltip>
+            </div>
         );
     };
     
-// ------------- Options Distribution -----------------
     const renderInsightPutCallDist = () => {
         const strike = selectedSegment?.strike || 'N/A';
         const groupedData = selectedSegment?.groupedData || {};
@@ -524,8 +512,6 @@ export default function DetailsBar({ activeTab,
 
         const getDoughnutChartData = (trades) => {
             const total = trades.length;
-        
-            // group by expiration
             const byExp = trades.reduce((acc, t) => {
                 const label = formatDateLabel(t.Expiration_Date);
                 if (!acc[label]) {
@@ -575,13 +561,12 @@ export default function DetailsBar({ activeTab,
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    displayColors: false,   // 🔹 removes the color box
+                    displayColors: false,
                     callbacks: {
                         label: (context) => {
                             const dataset = context.dataset;
                             const index = context.dataIndex;
                             const extra = dataset.extra?.[index];
-        
                             if (extra) {
                                 return [
                                     ` Distribution: ${extra.percentage}%`,
@@ -594,8 +579,7 @@ export default function DetailsBar({ activeTab,
                 },
                 datalabels: {
                     color: '#aaa',
-                    formatter: (_, context) =>
-                        context.chart.data.labels[context.dataIndex],
+                    formatter: (_, context) => context.chart.data.labels[context.dataIndex],
                     font: { size: 9, weight: 'bold' },
                     align: 'end',
                     anchor: 'end',
@@ -607,7 +591,6 @@ export default function DetailsBar({ activeTab,
             },
         };
         
-        
         const renderChart = (label) => {
             const trades = groupedData[label] || [];
             const totalTrades = Object.values(groupedData).reduce((sum, arr) => sum + arr.length, 0);
@@ -618,8 +601,6 @@ export default function DetailsBar({ activeTab,
                     <div style={styles.chartTitle}>
                         {label}
                     </div>
-        
-                    {/* 🔹 Show total trades count + percentage */}
                     <div style={{ 
                         fontSize: 'clamp(8px, 1vw, 10px)', 
                         fontWeight: 400, 
@@ -628,7 +609,6 @@ export default function DetailsBar({ activeTab,
                         {trades.length} Trade{trades.length !== 1 ? 's' : ''} 
                         {totalTrades > 0 && ` (${percentage}%)`}
                     </div>
-        
                     {trades.length === 0 ? (
                         <div style={styles.emptyBox}>No trades...</div>
                     ) : (
@@ -640,12 +620,10 @@ export default function DetailsBar({ activeTab,
             );
         };
          
-            // 🔹 Aggregate values for the selected segment
         const allTrades = Object.values(groupedData).flat();
         const totalTrades = allTrades.length;
         const totalValue = allTrades.reduce((sum, t) => sum + (t.Entry_Value || 0), 0);
         const totalBlockTrades = allTrades.reduce((sum, t) => sum + (t.BlockTrade_Count || 0), 0);
-
 
         return (
             <div style={styles.content}>
@@ -661,7 +639,7 @@ export default function DetailsBar({ activeTab,
             </div>
         );
     };
-// ------------- Strateges / Premium By strike -----------------
+
     const renderStrategyOverview = () => {
         const trades = selectedSegment?.trades || [];
         const tradeSummaries = getTradeSummary(trades);
@@ -686,7 +664,6 @@ export default function DetailsBar({ activeTab,
                 );
             }
         
-            // Determine alignment style
             let rowStyle = { ...styles.expirationRow };
             if (displayExpirations.length < 3) {
                 rowStyle = { 
@@ -719,8 +696,6 @@ export default function DetailsBar({ activeTab,
                         </div>
                     </div>
         
-
-        
                     <div style={styles.summaryRow}>
                         <CustomTooltip content={`Total Size: ${summary.Total_Size}`}> {'x' + summary.Total_Size} </CustomTooltip>
                         <CustomTooltip content={`Total Entry Value: ${summary.Entry_Value}`}> {summary.Entry_Value} </CustomTooltip>
@@ -729,7 +704,6 @@ export default function DetailsBar({ activeTab,
                         </CustomTooltip>
                         <CustomTooltip content={`Underlying Price: ${summary.Underlying_Price}`}> {summary.Underlying_Price} </CustomTooltip>
                     </div>
-                    {/* 🔹 Expiration Dates Row */}
                     <div style={rowStyle}>
                         {displayExpirations}
                     </div>
@@ -737,7 +711,6 @@ export default function DetailsBar({ activeTab,
             );
         };
         
-    
         return (
             <div style={styles.content}>
                 <div style={styles.mainProfitColumns}>
@@ -752,12 +725,12 @@ export default function DetailsBar({ activeTab,
                         </div>
                     </div>
                     {renderLiveTradeButtons()}
-                    <div style={styles.profitColumn }>
+                    <div style={styles.profitColumn}>
                         <ProfitCharts selectedTrades={trades} 
                                       initialMode="all" 
-                                       showModeToggle={true} 
-                                       width="100%" 
-                                       height="100%" 
+                                      showModeToggle={true} 
+                                      width="100%" 
+                                      height="100%" 
                         />
                     </div>
                 </div>
@@ -765,8 +738,6 @@ export default function DetailsBar({ activeTab,
         );
     };
 
-
- // ------------- top Volume -----------------   
     const renderInsightTopVolume = () => {
         const trades = selectedSegment?.trades || [];
         const yValue = selectedSegment?.y;
@@ -793,13 +764,10 @@ export default function DetailsBar({ activeTab,
 
         const getDoughnutChartData = (typeTrades) => {
             const total = typeTrades.length;
-        
-            // group by strike or expiration, also sum entry values
             const byField = typeTrades.reduce((acc, t) => {
                 const key = isStrikePriceMode
                     ? (t.Expiration_Date ? formatExpirationLabel(t.Expiration_Date) : "Unknown")
                     : (t.Strike_Price ? formatStrikeLabel(t.Strike_Price) : "Unknown");
-        
                 if (!acc[key]) {
                     acc[key] = { count: 0, entryValue: 0 };
                 }
@@ -845,7 +813,7 @@ export default function DetailsBar({ activeTab,
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    displayColors: false,  // 🔹 removes color box
+                    displayColors: false,
                     callbacks: {
                         label: (context) => {
                             const dataset = context.dataset;
@@ -875,7 +843,6 @@ export default function DetailsBar({ activeTab,
             },
         };
         
-
         const renderChart = (tradeType) => {
             const typeTrades = tradesByType[tradeType] || [];
             const tradeCount = typeTrades.length;
@@ -927,6 +894,177 @@ export default function DetailsBar({ activeTab,
             </div>
         );
     };
+    
+    const renderInsightMarketExposure = () => {
+        const segmentData = selectedSegment?.segmentData || {};
+        const mode = selectedSegment?.mode || segmentData?.chartMode || 'strikePrice';
+        const { groupKey, groupedData = {}, oiData = {}, ndeData = 0, ngeData = 0, timeframe = 'N/A' } = segmentData;
+        const isStrikePriceMode = mode === 'strikePrice';
+        const tradesByType = groupedData;
+
+        console.log("renderInsightMarketExposure called with segment:", { selectedSegment, mode, isStrikePriceMode });
+
+        const getDoughnutChartData = (typeTrades) => {
+            const total = typeTrades.length;
+            const byField = typeTrades.reduce((acc, t) => {
+                const key = isStrikePriceMode
+                    ? (t.Expiration_Date ? formatExpirationLabel(t.Expiration_Date) : "Unknown")
+                    : (t.Strike_Price ? formatStrikeLabel(t.Strike_Price) : "Unknown");
+                if (!acc[key]) {
+                    acc[key] = { count: 0, entryValue: 0 };
+                }
+                acc[key].count += 1;
+                acc[key].entryValue += t.Entry_Value || 0;
+                return acc;
+            }, {});
+            const entries = Object.entries(byField).map(([label, obj]) => ({
+                label,
+                count: obj.count,
+                entryValue: obj.entryValue,
+                percentage: total > 0 ? ((obj.count / total) * 100).toFixed(2) : 0,
+            }));
+            entries.sort((a, b) => b.count - a.count);
+            const labels = entries.map(({ label }) => label);
+            const values = entries.map(({ percentage }) => percentage);
+            const colors = generateCustomGradientColors('#283254', '#868dba', values);
+            return {
+                labels,
+                datasets: [{
+                    label: isStrikePriceMode ? 'Expiration Date %' : 'Strike Price %',
+                    data: values,
+                    backgroundColor: colors.slice(0, values.length),
+                    borderColor: '#121212',
+                    borderWidth: 1,
+                    extra: entries.map(e => ({ entryValue: e.entryValue, percentage: e.percentage })),
+                }],
+            };
+        };
+
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            layout: { padding: { top: 20, bottom: 20, left: 50, right: 50 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    callbacks: {
+                        label: (context) => {
+                            const dataset = context.dataset;
+                            const index = context.dataIndex;
+                            const extra = dataset.extra?.[index];
+                            if (extra) {
+                                return [
+                                    ` Distribution: ${extra.percentage}%`,
+                                    ` Total Value: ${formatStrikeLabel(extra.entryValue)}`
+                                ];
+                            }
+                            return ` ${context.raw}%`;
+                        },
+                    },
+                },
+                datalabels: {
+                    color: '#aaa',
+                    formatter: (_, context) => context.chart.data.labels[context.dataIndex],
+                    font: { size: 9.5, weight: 'bold' },
+                    align: 'end',
+                    anchor: 'end',
+                    offset: 1,
+                    rotation: 0,
+                    clip: false,
+                    display: 'auto',
+                },
+            },
+        };
+
+        const renderChart = (tradeType) => {
+            const typeTrades = tradesByType[tradeType] || [];
+            const tradeCount = typeTrades.length;
+            const totalTrades = Object.values(tradesByType).reduce((sum, arr) => sum + arr.length, 0);
+            const percentage = totalTrades > 0 ? ((tradeCount / totalTrades) * 100).toFixed(1) : 0;
+            return (
+                <div key={tradeType} style={styles.chartBox}>
+                    <div style={styles.chartTitle}>
+                        {tradeType}
+                        <div style={{ fontSize: 10, fontWeight: 400, color: "rgb(154, 154, 154)" }}>
+                            {tradeCount} Trade{tradeCount !== 1 ? 's' : ''} {totalTrades > 0 && ` (${percentage}%)`}
+                        </div>
+                    </div>
+                    {tradeCount === 0 ? (
+                        <div style={styles.emptyBox}>No trades...</div>
+                    ) : (
+                        <div style={styles.chartWrapper}>
+                            <Doughnut data={getDoughnutChartData(typeTrades)} options={chartOptions} />
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const allTrades = Object.values(tradesByType).flat();
+        const totalTrades = allTrades.length;
+        const totalValue = allTrades.reduce((sum, t) => sum + (t.Entry_Value || 0), 0);
+        const blockTradesCount = allTrades.reduce((sum, t) => sum + (t.BlockTrade_Count || 0), 0);
+        const yLabel = isStrikePriceMode ? 'Strike Price' : 'Expiration Date';
+        const yValueFormat = groupKey != null 
+            ? (isStrikePriceMode 
+                ? formatStrikeLabel(typeof groupKey === 'string' && groupKey.includes('k') ? parseInt(groupKey.replace('k', '') * 1000) : groupKey) 
+                : formatExpirationLabel(groupKey)) 
+            : 'N/A';
+        const formattedOiCall = oiData.Call != null ? (Math.abs(oiData.Call) >= 1000 ? `${(oiData.Call / 1000).toFixed(1)}k` : oiData.Call.toFixed(0)) : 'N/A';
+        const formattedOiPut = oiData.Put != null ? (Math.abs(oiData.Put) >= 1000 ? `${(oiData.Put / 1000).toFixed(1)}k` : oiData.Put.toFixed(0)) : 'N/A';
+        const formattedNde = Math.abs(ndeData) >= 1000 ? `${(ndeData / 1000).toFixed(1)}k` : ndeData.toFixed(0);
+        const formattedNge = Math.abs(ngeData) >= 1000 ? `${(ngeData / 1000).toFixed(1)}k` : ngeData.toFixed(2);
+
+        return (
+            <div style={styles.content}>
+                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px' }}>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Timeframe </div>
+                        <span><CustomTooltip content={`Timeframe: From ${timeframe} days ago`}> {timeframe} days ago </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> {yLabel} </div>
+                        <span><CustomTooltip content={`${yLabel}: ${yValueFormat}`}> {yValueFormat} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Trades </div>
+                        <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Values </div>
+                        <span><CustomTooltip content={`Total values: ${formatStrikeLabel(totalValue)}`}> ${formatStrikeLabel(totalValue)} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> BlockTrades </div>
+                        <span><CustomTooltip content={`Number of Block Trades in this timeframe: ${blockTradesCount}`}> {blockTradesCount} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Call OI Change </div>
+                        <span><CustomTooltip content={`Call OI Change: ${formattedOiCall}`}> {formattedOiCall} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Put OI Change </div>
+                        <span><CustomTooltip content={`Put OI Change: ${formattedOiPut}`}> {formattedOiPut} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Net Delta Exposure </div>
+                        <span><CustomTooltip content={`Net Delta Exposure: ${formattedNde}`}> {formattedNde} </CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Net Gamma Exposure </div>
+                        <span><CustomTooltip content={`Net Gamma Exposure: ${formattedNge}`}> {formattedNge} </CustomTooltip></span>
+                    </div>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                    <div style={styles.grid}>
+                        {['Buy Call', 'Sell Call', 'Buy Put', 'Sell Put'].map(renderChart)}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const renderDefault = () => (
         <div style={styles.content}>
@@ -939,6 +1077,7 @@ export default function DetailsBar({ activeTab,
 
     let contentToRender;
     if (!selectedSegment || !contextId) {
+        console.log("DetailsBar: No selectedSegment or contextId, rendering default message");
         contentToRender = (
             <div style={styles.content}>
                 <div style={{ color: '#777', textAlign: 'center', padding: '16px' }}>
@@ -947,7 +1086,17 @@ export default function DetailsBar({ activeTab,
             </div>
         );
     } else {
-        switch (contextId) {
+        // Normalize selectedSegment to ensure compatibility
+        const normalizedSegment = {
+            segmentData: selectedSegment.segmentData || selectedSegment,
+            mode: selectedSegment.mode || selectedSegment.segmentData?.chartMode || 'strikePrice'
+        };
+
+        console.log("DetailsBar: Normalized segment:", normalizedSegment);
+
+        // Normalize contextId for case-insensitive comparison
+        const normalizedContextId = contextId.toLowerCase();
+        switch (normalizedContextId) {
             case "insight/putcalldist":
                 contentToRender = renderInsightPutCallDist();
                 break;
@@ -958,12 +1107,15 @@ export default function DetailsBar({ activeTab,
             case "insight/topvolume":
                 contentToRender = renderInsightTopVolume();
                 break;
+            case "insight/marketexposure":
+                contentToRender = renderInsightMarketExposure();
+                break;
             default:
+                console.log("DetailsBar: Unknown contextId, rendering default:", contextId);
                 contentToRender = renderDefault();
                 break;
         }
     }
-
 
     return (
         <div style={styles.wrapper}>

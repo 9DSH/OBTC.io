@@ -30,6 +30,8 @@ export default function InsightsTab({ data = [],
         ? "insight/premiumbystrike"
         : activeSubtab === "topVolume"
         ? "insight/topvolume"
+        : activeSubtab === "marketExposure"
+        ? "insight/marketExposure"
         : null;
   
       const rawSegment = segment.selectedSegment ? segment.selectedSegment : segment;

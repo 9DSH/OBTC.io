@@ -34,19 +34,16 @@ export const processSimulateData = (simulateData, tabs, openedTabs, chains, btcP
 
   let comboID = simulateData.comboID;
 
-  // fallback to first trade's Combo_ID
   if (!comboID && simulateData.trades[0]?.Combo_ID) {
     comboID = simulateData.trades[0].Combo_ID;
     console.log(`Using Combo_ID from trade as comboID: ${comboID}`);
   }
   
-  // fallback to first trade's Trade_ID if comboID is still missing
   if (!comboID && simulateData.trades[0]?.Trade_ID) {
     comboID = simulateData.trades[0].Trade_ID.toString();
     console.log(`Combo_ID missing, using first trade's Trade_ID as comboID: ${comboID}`);
   }
   
-  // final check
   if (!comboID) {
     console.warn('No valid comboID or Trade_ID found in simulateData:', simulateData);
     return false;
@@ -107,6 +104,10 @@ export const processSimulateData = (simulateData, tabs, openedTabs, chains, btcP
 
     const priceUSD = matchingChain ? matchingChain.Price_USD : trade.Price_USD || '';
     const ivPercent = matchingChain ? matchingChain.IV_Percent : trade.IV_Percent || '';
+    const delta = matchingChain ? matchingChain.Delta : trade.Delta || 0;
+    const gamma = matchingChain ? matchingChain.Gamma : trade.Gamma || 0;
+    const theta = matchingChain ? matchingChain.Theta : trade.Theta || 0;
+    const vega = matchingChain ? matchingChain.Vega : trade.Vega || 0;
     const tradeSize = matchingChain ? matchingChain.Size || trade.Size : trade.Size || 1;
     const underlyingPrice = btcPrice && btcPrice.btcprice ? btcPrice.btcprice.toFixed(2)
       : (trade.Underlying_Price ? trade.Underlying_Price.toFixed(2) : '60000');
@@ -121,7 +122,11 @@ export const processSimulateData = (simulateData, tabs, openedTabs, chains, btcP
       iv_percent: ivPercent,
       size: tradeSize,
       underlying_price: underlyingPrice,
-      isSelected: true
+      isSelected: true,
+      delta, 
+      gamma, 
+      theta, 
+      vega,
     };
   });
 
@@ -175,18 +180,18 @@ export function formatToTwoDecimals(value) {
     const num = parseFloat(value);
     if (isNaN(num)) return '';
     return num.toFixed(2);
-  }
-  
-  export function formatInstrumentExp(dateStr) {
+}
+
+export function formatInstrumentExp(dateStr) {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     const day = date.getDate().toString().padStart(2, '0');
     const month = date.toLocaleString('default', { month: 'short' }).toUpperCase();
     const year = date.getFullYear().toString().slice(2);
     return `${day}${month}${year}`;
-  }
-  
-  export function parseInstrument(inst) {
+}
+
+export function parseInstrument(inst) {
     if (!inst) return { strike_price: '', type: '' };
     const parts = inst.split('-');
     if (parts.length !== 4) return { strike_price: '', type: '' };
@@ -194,40 +199,54 @@ export function formatToTwoDecimals(value) {
     const typeChar = parts[3];
     const fullType = typeChar === 'C' ? 'Call' : typeChar === 'P' ? 'Put' : '';
     return { strike_price: strike, type: fullType };
+}
+
+export const updateTradePricing = (trade, chains) => {
+  if (!trade.expiration_date || !trade.strike_price || !trade.type || !trade.side || !chains) {
+      return { ...trade, price: '', iv_percent: '', delta: '', gamma: '', theta: '', vega: '' };
   }
-  
-  export function updateTradePricing(trade, chains) {
-    if (!trade.expiration_date || !trade.strike_price || !trade.type || !trade.side || !chains) {
-      return { ...trade, price: '', iv_percent: '' };
-    }
-  
-    const chainData = chains.find(
+  const chainData = chains.find(
       item => {
-        const date = new Date(item.Expiration_Date);
-        return date.toISOString().split('T')[0] === trade.expiration_date &&
-               item.Strike_Price === parseFloat(trade.strike_price) &&
-               item.Option_Type.toLowerCase() === trade.type.toLowerCase();
+          const date = new Date(item.Expiration_Date);
+          const formattedDate = date.toISOString().split('T')[0];
+          return formattedDate === trade.expiration_date &&
+              item.Strike_Price === parseFloat(trade.strike_price) &&
+              item.Option_Type.toLowerCase() === trade.type.toLowerCase();
       }
-    );
-  
-    if (!chainData) {
+  );
+
+  if (!chainData) {
       console.warn(`No chain data found for trade:`, trade);
-      return { ...trade, price: '', iv_percent: '' };
-    }
-  
-    const isBuy = trade.side.toLowerCase() === 'buy';
-    const price = isBuy ? chainData.Ask_Price_USD || 0 : chainData.Bid_Price_USD || 0;
-    const iv = isBuy ? chainData.Ask_IV || 0 : chainData.Bid_IV || 0;
-  
-    return { ...trade, price: price.toString(), iv_percent: iv.toString() };
+      return { ...trade, price: '', iv_percent: '', delta: '', gamma: '', theta: '', vega: '' };
   }
-  
-  export function getSelectedTrades(selectedOptions, chains, btcPrice) {
+
+  const isBuy = trade.side.toLowerCase() === 'buy';
+  const price = isBuy ? chainData.Ask_Price_USD : chainData.Bid_Price_USD;
+  const iv = isBuy ? chainData.Ask_IV : chainData.Bid_IV;
+
+  // Fetch Greek values directly from the chainData object
+  const delta = chainData.Delta;
+  const gamma = chainData.Gamma;
+  const theta = chainData.Theta;
+  const vega = chainData.Vega;
+
+  return {
+      ...trade,
+      price: price ? price.toString() : '',
+      iv_percent: iv ? (iv * 100).toFixed(2).toString() : '',
+      delta: delta ? delta.toString() : '',
+      gamma: gamma ? gamma.toString() : '',
+      theta: theta ? theta.toString() : '',
+      vega: vega ? vega.toString() : '',
+  };
+};
+
+
+export function getSelectedTrades(selectedOptions, chains, btcPrice) {
     if (!chains || !Array.isArray(chains)) {
       console.log('No chains data available for selectedTrades');
       return [];
     }
-  
     const now = new Date();
     const selectedTrades = selectedOptions
       .filter(option => option.isSelected)
@@ -240,21 +259,22 @@ export function formatToTwoDecimals(value) {
                    item.Option_Type.toLowerCase() === option.type.toLowerCase();
           }
         );
-  
         if (!chainData) {
           console.warn(`No chain data found for option:`, option);
           return null;
         }
-  
         const expDate = new Date(option.expiration_date + 'T00:00:00Z');
         const timeToExpDays = (expDate - now) / (1000 * 60 * 60 * 24);
         if (timeToExpDays <= 0) {
           return null;
         }
-  
         const isBuy = option.side.toLowerCase() === 'buy';
         const priceUSD = parseFloat(option.price) || (isBuy ? chainData.Ask_Price_USD || 0 : chainData.Bid_Price_USD || 0);
         const ivPercent = parseFloat(option.iv_percent) || (isBuy ? chainData.Ask_IV || 0 : chainData.Bid_IV || 0);
+        const delta = parseFloat(option.delta) || (isBuy ? chainData.Delta || 0 : -chainData.Delta || 0);
+        const gamma = parseFloat(option.gamma) || (chainData.Gamma || 0);
+        const theta = parseFloat(option.theta) || (chainData.Theta || 0);
+        const vega = parseFloat(option.vega) || (chainData.Vega || 0);
         const size = parseFloat(option.size);
         const underlyingPrice = parseFloat(option.underlying_price) ||
           (btcPrice && btcPrice.btcprice && !isNaN(btcPrice.btcprice)
@@ -263,7 +283,6 @@ export function formatToTwoDecimals(value) {
         const entryValue = priceUSD * size;
         const priceBTC = underlyingPrice ? (priceUSD / underlyingPrice) : 0;
         const instrument = `BTC-${formatInstrumentExp(option.expiration_date)}-${option.strike_price}-${option.type[0]}`;
-  
         return {
           BlockTrade_Count: 1,
           BlockTrade_IDs: null,
@@ -281,10 +300,13 @@ export function formatToTwoDecimals(value) {
           Size: size,
           Strike_Price: parseFloat(option.strike_price),
           Trade_ID: `trade-${index}-${option.expiration_date}-${option.strike_price}`,
-          Underlying_Price: parseFloat(formatToTwoDecimals(underlyingPrice))
+          Underlying_Price: parseFloat(formatToTwoDecimals(underlyingPrice)),
+          Delta: delta,
+          Gamma: gamma,
+          Theta: theta,
+          Vega: vega
         };
       })
       .filter(trade => trade !== null);
-  
     return selectedTrades;
-  }
+}
