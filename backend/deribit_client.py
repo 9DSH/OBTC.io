@@ -93,7 +93,6 @@ class DeribitClient:
                 try:
                     async with session_http.get(url, params=params) as resp:
                         if resp.status == 429:
-                            # logger.warning(f"Rate limited for {instrument_name}, retry {attempt+1}")
                             await asyncio.sleep(5)
                             continue
                         resp.raise_for_status()
@@ -114,23 +113,20 @@ class DeribitClient:
 
         async with aiohttp.ClientSession() as session_http:
             order_books = []
-            chunk_size = 20  # Batch size to comply with 20/s rate limit (with burst allowance)
+            chunk_size = 20
             for i in range(0, len(instruments), chunk_size):
                 chunk = instruments[i:i + chunk_size]
                 chunk_tasks = [self.fetch_order_book(session_http, inst['instrument_name']) for inst in chunk]
                 chunk_results = await asyncio.gather(*chunk_tasks)
                 order_books.extend(chunk_results)
                 if i + chunk_size < len(instruments):
-                    await asyncio.sleep(1)  # Sleep 1 second between batches to average ~20 requests/s
+                    await asyncio.sleep(1)
 
-        # Prepare data for probability calculation
         options_data = []
         for inst, ob in zip(instruments, order_books):
             if not ob:
                 continue
             expiration = datetime.utcfromtimestamp(inst['expiration_timestamp'] / 1000).date()
-
-            # Match the exact column names used in your probability function
             options_data.append({
                 "Instrument": inst['instrument_name'],
                 "Option Type": inst.get('option_type'),
@@ -142,7 +138,6 @@ class DeribitClient:
                 "Gamma": ob.get('greeks', {}).get('gamma'),
                 "Theta": ob.get('greeks', {}).get('theta'),
                 "Vega": ob.get('greeks', {}).get('vega'),
-                # These aren't used in probability but keep for your DB later:
                 "Last Price (USD)": ob.get('last_price', 0.0) * btc_usd_price if ob.get('last_price') else 0.0,
                 "Bid Price (USD)": ob.get('best_bid_price', 0.0) * btc_usd_price if ob.get('best_bid_price') else 0.0,
                 "Ask Price (USD)": ob.get('best_ask_price', 0.0) * btc_usd_price if ob.get('best_ask_price') else 0.0,
@@ -151,31 +146,24 @@ class DeribitClient:
                 "Monetary Volume": ob.get('stats', {}).get('volume_usd', 0.0),
             })
 
-        # Create DataFrame and calculate probabilities
         df = pd.DataFrame(options_data)
-
         if not df.empty:
             prob_df = self.option_probabilities_with_greeks(df)
             prob_dict = prob_df.set_index('Instrument')['Exercise_Probability (%)'].to_dict()
         else:
             prob_dict = {}
 
-        # Save to DB with probabilities
         def db_save():
             session = SessionLocal()
             count = 0
             try:
-                # Remove expired option chains
                 self.remove_expired_option_chains_from_db(session)
-
                 for inst, ob in zip(instruments, order_books):
                     if not ob:
                         continue
                     expiration = datetime.utcfromtimestamp(inst['expiration_timestamp'] / 1000).date()
-
                     instrument_name = inst['instrument_name']
                     probability = prob_dict.get(instrument_name, 0.0)
-
                     data = {
                         "Instrument": instrument_name,
                         "Option_Type": inst.get('option_type'),
@@ -196,12 +184,8 @@ class DeribitClient:
                         "Probability_Percent": probability,
                         "Timestamp": datetime.utcnow()
                     }
-
                     session.add(OptionChain(**data))
-
-
                     count += 1
-
                 session.commit()
                 logger.info(f"Saved {count} option chains.")
             except Exception as e:
@@ -212,109 +196,98 @@ class DeribitClient:
 
         await asyncio.get_running_loop().run_in_executor(self.executor, db_save)
 
-
     async def fetch_public_trades_for_instrument(self, session_http, instrument, start_ts, end_ts):
+        """
+        Fetch all public trades for a single instrument only once.
+        Handles pagination and rate limits efficiently.
+        """
         url = 'https://www.deribit.com/api/v2/public/get_last_trades_by_instrument_and_time'
-        params = {
-            'instrument_name': instrument,
-            'start_timestamp': start_ts,
-            'end_timestamp': end_ts,
-            'count': 1000
-        }
+        all_trades = []
+        last_ts = start_ts
 
         async with self.semaphore:
-            for attempt in range(5):  # more retries just in case
+            while last_ts < end_ts:
+                params = {
+                    'instrument_name': instrument,
+                    'start_timestamp': last_ts,
+                    'end_timestamp': end_ts,
+                    'count': 1000
+                }
+
                 try:
                     async with session_http.get(url, params=params) as resp:
                         if resp.status == 429:
-                            delay = 2 ** attempt  # exponential backoff: 1, 2, 4, 8, 16 sec
-                        #    logger.warning(f"Rate limited for {instrument}, retry {attempt + 1}, waiting {delay}s")
-                            await asyncio.sleep(delay)
+                            await asyncio.sleep(1)
                             continue
                         resp.raise_for_status()
                         data = await resp.json()
-                        return data.get('result', {}).get('trades', [])
-                except aiohttp.ClientResponseError as e:
-                    logger.error(f"Client error fetching trades for {instrument}: {e}")
-                except aiohttp.ClientError as e:
-                    logger.error(f"Connection error for {instrument}: {e}")
+                        trades = data.get('result', {}).get('trades', [])
+
+                        if not trades:
+                            break
+
+                        all_trades.extend(trades)
+                        last_ts = max(t['timestamp'] for t in trades) + 1
+
                 except Exception as e:
-                    logger.error(f"Unexpected error fetching trades for {instrument}: {e}")
-                
-                await asyncio.sleep(2)  # fallback wait on generic failure
+                    logger.error(f"[{instrument}] Fetch error: {e}")
+                    break
 
-            logger.error(f"Failed to fetch trades for {instrument} after multiple attempts.")
-            return []
-
-    def parse_instrument_metadata(self, instrument_name):
-        try:
-            parts = instrument_name.split('-')
-            if len(parts) != 4:
-                return None, None, None
-
-            _, date_str, strike, option_type_code = parts
-            expiration_date = datetime.strptime(date_str, "%d%b%y").date()
-            strike_price = float(strike)
-
-            # Map option type
-            option_type = 'Call' if option_type_code.upper() == 'C' else 'Put' if option_type_code.upper() == 'P' else None
-
-            return expiration_date, strike_price, option_type
-        except Exception as e:
-            logger.warning(f"Failed to parse instrument metadata for {instrument_name}: {e}")
-            return None, None, None
+            logger.info(f"[{instrument}] Fetched {len(all_trades)} trades successfully (single fetch)")
+            return all_trades
 
     async def fetch_and_store_public_trades(self):
+        """
+        Fetch trades for all instruments only once and store in DB.
+        Ensures each instrument is processed exactly once to avoid rate limit issues.
+        """
         try:
             logger.info("Starting public trades fetch and store cycle.")
             session = SessionLocal()
-            
-            instruments = [i.Instrument for i in session.query(OptionChain.Instrument).all()]
+            # Fetch unique instruments to avoid duplicates
+            instruments = list(set(i.Instrument for i in session.query(OptionChain.Instrument).all()))
             session.close()
+            logger.info(f"Processing {len(instruments)} unique instruments.")
 
             end = datetime.utcnow()
             start = end - timedelta(hours=24)
             start_ts = int(start.timestamp() * 1000)
             end_ts = int(end.timestamp() * 1000)
 
+            all_trades = []
+            chunk_size = 20  # Batch size to comply with 20/s rate limit
+
             async with aiohttp.ClientSession() as session_http:
-                all_trades = []
-                chunk_size = 20
                 for i in range(0, len(instruments), chunk_size):
                     chunk = instruments[i:i + chunk_size]
-                    chunk_tasks = [self.fetch_public_trades_for_instrument(session_http, inst, start_ts, end_ts) for inst in chunk]
-                    chunk_results = await asyncio.gather(*chunk_tasks)
-                    all_trades.extend(chunk_results)
+                    tasks = [self.fetch_public_trades_for_instrument(session_http, inst, start_ts, end_ts) for inst in chunk]
+                    results = await asyncio.gather(*tasks)
+                    all_trades.extend(results)
                     if i + chunk_size < len(instruments):
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(1)  # Rate limit sleep
+                    logger.debug(f"Processed batch {i//chunk_size + 1} of {len(instruments)//chunk_size + 1}")
 
             def db_save():
                 session = SessionLocal()
-                count = 0
-                
                 try:
                     self.remove_expired_trades_from_db(session)
-                    
-                    all_trades_flat = [trade for trades_list in all_trades for trade in trades_list]
-                    
-                    unique_trades_map = {str(t['trade_id']): t for t in all_trades_flat if 'trade_id' in t}
-                    
+                    flat_trades = [trade for trades_list in all_trades for trade in trades_list]
+                    unique_trades = {str(t['trade_id']): t for t in flat_trades if 'trade_id' in t}
+
                     trades_to_add = []
-                    for trade_id, t in unique_trades_map.items():
-                        try:
-                            if session.query(PublicTrade).filter_by(Trade_ID=trade_id).first():
-                                logger.debug(f"Skipping trade with ID {trade_id}: already exists in DB.")
-                                continue
-    
-                            expiration_date, strike_price, option_type = self.parse_instrument_metadata(t.get('instrument_name'))
-                            if not expiration_date:
-                                logger.warning(f"Skipping trade with ID {trade_id}: could not parse instrument metadata.")
-                                continue
-                                
-                            raw_block_id = ','.join(t.get('block_trade_id', [])) if 'block_trade_id' in t else None
-                            raw_combo_id = ','.join(t.get('combo_trade_id', [])) if 'combo_trade_id' in t else None
-                            
-                            new_trade = PublicTrade(
+                    for trade_id, t in unique_trades.items():
+                        if session.query(PublicTrade).filter_by(Trade_ID=trade_id).first():
+                            continue
+
+                        expiration_date, strike_price, option_type = self.parse_instrument_metadata(t.get('instrument_name'))
+                        if not expiration_date:
+                            continue
+
+                        raw_block_id = ','.join(t.get('block_trade_id', [])) if 'block_trade_id' in t else None
+                        raw_combo_id = ','.join(t.get('combo_trade_id', [])) if 'combo_trade_id' in t else None
+
+                        trades_to_add.append(
+                            PublicTrade(
                                 Trade_ID=trade_id,
                                 Side=t.get('direction'),
                                 Instrument=t.get('instrument_name'),
@@ -333,60 +306,59 @@ class DeribitClient:
                                 Combo_ID=t.get('combo_id'),
                                 ComboTrade_IDs=self.clean_trade_id(raw_combo_id),
                             )
-                            trades_to_add.append(new_trade)
-                            count += 1
-                        except (KeyError, TypeError, ValueError) as e:
-                            logger.error(f"Data processing error for trade {trade_id}: {e}. Skipping this trade.")
-                            continue
-    
+                        )
+
                     if trades_to_add:
                         session.add_all(trades_to_add)
                         session.commit()
-                        logger.info(f"Saved {len(trades_to_add)} public trades.")
+                        logger.info(f"Saved {len(trades_to_add)} new public trades.")
                     else:
                         logger.info("No new public trades to save.")
-    
+
                 except Exception as e:
-                    logger.error(f"A broader error occurred during public trades save: {e}")
+                    logger.error(f"Error saving public trades: {e}")
                     session.rollback()
                 finally:
                     session.close()
 
             await asyncio.get_running_loop().run_in_executor(self.executor, db_save)
-            
+
         except Exception as e:
-            logger.error(f"An unexpected error occurred in the main fetch_and_store_public_trades function: {e}")
+            logger.error(f"Unexpected error in fetch_and_store_public_trades: {e}")
 
+    def parse_instrument_metadata(self, instrument_name):
+        try:
+            parts = instrument_name.split('-')
+            if len(parts) != 4:
+                return None, None, None
 
-        
+            _, date_str, strike, option_type_code = parts
+            expiration_date = datetime.strptime(date_str, "%d%b%y").date()
+            strike_price = float(strike)
+            option_type = 'Call' if option_type_code.upper() == 'C' else 'Put' if option_type_code.upper() == 'P' else None
+            return expiration_date, strike_price, option_type
+        except Exception as e:
+            logger.warning(f"Failed to parse instrument metadata for {instrument_name}: {e}")
+            return None, None, None
+
     def remove_expired_option_chains_from_db(self, session):
-        """
-        Remove expired option chains from OptionChain DB.
-        Similar to remove_expired_trades_from_db but for option chains.
-        """
         now = datetime.utcnow()
         today = now.date()
-        cleanup_time = time(8, 0)  # 08:00 UTC
-
-        # Determine the intended cycle date
+        cleanup_time = time(8, 0)
         if now.hour >= 8:
             this_cycle = today
         else:
             this_cycle = today - timedelta(days=1)
 
-        # Check last cleanup
         meta = session.query(SystemState).filter_by(key="last_option_chain_cleanup").first()
         already_cleaned = (meta.value_date == this_cycle) if meta else False
 
         if not already_cleaned and now >= datetime.combine(this_cycle, cleanup_time):
-            # Delete expired option chains
             cutoff_datetime = datetime.combine(this_cycle, datetime.min.time())
             num_deleted = session.query(OptionChain) \
                 .filter(OptionChain.Expiration_Date < cutoff_datetime) \
                 .delete(synchronize_session=False)
             logger.info(f"Removed {num_deleted} expired option chains from DB.")
-
-            # Update state in DB
             if meta:
                 meta.value_date = this_cycle
             else:
@@ -396,31 +368,24 @@ class DeribitClient:
         else:
             logger.debug(f"No cleanup needed for option chains: already cleaned for {this_cycle} or not time yet.")
 
-
     def remove_expired_trades_from_db(self, session):
         now = datetime.utcnow()
         today = now.date()
-        cleanup_time = time(8, 0)  # 08:00 UTC
-
-        # Determine the *intended* cycle date ("8th June cleanup is for trades expiring before 8th June...")
+        cleanup_time = time(8, 0)
         if now.hour >= 8:
             this_cycle = today
         else:
             this_cycle = today - timedelta(days=1)
 
-        # Check the meta table for last cleanup
         meta = session.query(SystemState).filter_by(key="last_public_trade_cleanup").first()
         already_cleaned = (meta.value_date == this_cycle) if meta else False
 
         if not already_cleaned and now >= datetime.combine(this_cycle, cleanup_time):
-            # Run your deletion logic
             cutoff_datetime = datetime.combine(this_cycle, datetime.min.time())
             num_deleted = session.query(PublicTrade) \
                 .filter(PublicTrade.Expiration_Date < cutoff_datetime) \
                 .delete(synchronize_session=False)
             logger.info(f"Removed {num_deleted} expired public trades from DB before storing new trades.")
-
-            # Update state in DB
             if meta:
                 meta.value_date = this_cycle
             else:
@@ -458,7 +423,6 @@ class DeribitClient:
         X_train_scaled = scaler.fit_transform(X_train)
         X_valid_scaled = scaler.transform(X_valid)
 
-        # Convert to DataFrame to maintain feature names
         X_train_scaled = pd.DataFrame(X_train_scaled, columns=features)
         X_valid_scaled = pd.DataFrame(X_valid_scaled, columns=features)
 
@@ -491,15 +455,11 @@ class DeribitClient:
 
         results_df = df.iloc[y_valid.index].copy()
         results_df['Exercise_Probability (%)'] = y_proba * 100
-
-        # Modify the Exercise Probability
         results_df['Exercise_Probability (%)'] = results_df['Exercise_Probability (%)'].apply(lambda x: int(round((x - int(x)) * 1000)) / 10)
 
         return results_df[['Instrument', 'Exercise_Probability (%)']]
     
     def fetch_btc_to_usd(self):
-        """Fetch current BTC to USD conversion rate.""" 
-        
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
         try:
             response = self.session.get(url)
@@ -512,11 +472,10 @@ class DeribitClient:
             return 0
         
     def fetch_today_high_low(self):
-        # Using get_book_summary_by_currency which reliably returns high/low for BTC
         url = "https://www.deribit.com/api/v2/public/get_book_summary_by_currency"
         params = {
             'currency': 'BTC',
-            'kind': 'future'  # For perpetual swaps and futures
+            'kind': 'future'
         }
         
         try:
@@ -528,7 +487,6 @@ class DeribitClient:
                 print("Error: No results in getting highest and lowest price response")
                 return None, None
                 
-            # Find BTC-PERPETUAL in results
             for instrument in data['result']:
                 if instrument['instrument_name'] == 'BTC-PERPETUAL':
                     highest_price = int(float(instrument['high']))
