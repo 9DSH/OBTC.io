@@ -273,15 +273,27 @@ class DeribitClient:
 
     def remove_expired_option_chains_from_db(self, session):
         one_week_ago = datetime.utcnow() - timedelta(days=7)
+        now = datetime.utcnow()
+        
         meta = session.query(SystemState).filter_by(key="last_option_chain_cleanup").first()
         already_cleaned = (meta and meta.value_date and meta.value_date.date() == datetime.utcnow().date()) if meta else False
+
         if not already_cleaned:
-            num_deleted = session.query(OptionChain).filter(OptionChain.Timestamp < one_week_ago).delete(synchronize_session=False)
-            logger.info(f"Removed {num_deleted} option chains older than 7 days.")
+            # Combine the two conditions in a single filter
+            num_deleted = session.query(OptionChain).filter(
+                or_(
+                    OptionChain.Timestamp < one_week_ago,
+                    OptionChain.expiration_date < now
+                )
+            ).delete(synchronize_session=False)
+
+            logger.info(f"Removed {num_deleted} expired or old option chains.")
+            
             if meta:
                 meta.value_date = datetime.utcnow()
             else:
                 session.add(SystemState(key="last_option_chain_cleanup", value_date=datetime.utcnow()))
+            
             session.commit()
 
     def remove_expired_trades_from_db(self, session):
