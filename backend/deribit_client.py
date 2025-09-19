@@ -106,19 +106,21 @@ class DeribitClient:
         if not instruments:
             return
 
-        chunk_size = 10
+        chunk_size = 5  # smaller chunk to reduce CPU/RAM spikes
+        sleep_between_chunks = 3  # throttle between chunks
+
         for i in range(0, len(instruments), chunk_size):
             chunk = instruments[i:i + chunk_size]
             tasks = [self.fetch_order_book(inst['instrument_name']) for inst in chunk]
             results = await asyncio.gather(*tasks)
 
-            # Save chunk immediately
-            def db_save_chunk():
+            # Save chunk immediately in executor
+            def db_save_chunk(chunk_data, order_books):
                 session = SessionLocal()
                 count = 0
                 try:
                     self.remove_expired_option_chains_from_db(session)
-                    for inst, ob in zip(chunk, results):
+                    for inst, ob in zip(chunk_data, order_books):
                         if not ob:
                             continue
                         expiration = datetime.utcfromtimestamp(inst['expiration_timestamp'] / 1000).date()
@@ -152,9 +154,11 @@ class DeribitClient:
                 finally:
                     session.close()
 
-            await asyncio.get_running_loop().run_in_executor(self.executor, db_save_chunk)
+            await asyncio.get_running_loop().run_in_executor(self.executor, db_save_chunk, chunk, results)
+
+            results.clear()  # free memory immediately
             if i + chunk_size < len(instruments):
-                await asyncio.sleep(2)
+                await asyncio.sleep(sleep_between_chunks)
 
     async def fetch_public_trades_for_instrument(self, instrument, start_ts, end_ts):
         session_http = await self._get_aiohttp_session()
@@ -188,6 +192,7 @@ class DeribitClient:
         logger.info(f"[{instrument}] Fetched {len(trades_list)} trades.")
         return trades_list
 
+
     async def fetch_and_store_public_trades(self):
         try:
             session_db = SessionLocal()
@@ -199,22 +204,25 @@ class DeribitClient:
             start = end - timedelta(hours=1)
             start_ts = int(start.timestamp() * 1000)
             end_ts = int(end.timestamp() * 1000)
-            chunk_size = 10
+
+            chunk_size = 5  # smaller chunk
+            sleep_between_chunks = 3
 
             for i in range(0, len(instruments), chunk_size):
                 chunk = instruments[i:i + chunk_size]
                 tasks = [self.fetch_public_trades_for_instrument(inst, start_ts, end_ts) for inst in chunk]
                 results = await asyncio.gather(*tasks)
 
-                # Save trades per instrument to minimize memory
+                # Save trades per instrument
                 for trades_list in results:
                     if not trades_list:
                         continue
-                    def db_save_trades():
+
+                    def db_save_trades(trades):
                         session = SessionLocal()
                         try:
                             self.remove_expired_trades_from_db(session)
-                            for t in trades_list:
+                            for t in trades:
                                 trade_id = str(t.get('trade_id'))
                                 if not trade_id or session.query(PublicTrade).filter_by(Trade_ID=trade_id).first():
                                     continue
@@ -249,10 +257,12 @@ class DeribitClient:
                             session.rollback()
                         finally:
                             session.close()
-                    await asyncio.get_running_loop().run_in_executor(self.executor, db_save_trades)
+
+                    await asyncio.get_running_loop().run_in_executor(self.executor, db_save_trades, trades_list)
+                    trades_list.clear()  # free memory immediately
 
                 if i + chunk_size < len(instruments):
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(sleep_between_chunks)
 
         except Exception as e:
             logger.error(f"Unexpected error in fetch_and_store_public_trades: {e}")
