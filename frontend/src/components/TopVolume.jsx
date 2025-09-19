@@ -28,7 +28,6 @@ const COLOR_STOPS = [
   { value: 15_000_000, startHex: '#c24915', endHex: '#cc4a16', label: '15M-30M' },
   { value: 10_000_000, startHex: '#b37802', endHex: '#e3721b', label: '10M-15M' },
   { value: 5_000_000, startHex: '#ccb702', endHex: '#cf9100', label: '5M-9M' },
-  // Modified startHex and endHex for the 1M-4M range
   { value: 1_000_000, startHex: '#48616e', endHex: '#b5a412', label: '1M-4M' },
   { value: 500_000, startHex: '#373c52', endHex: '#484f6e', label: '500K-900K' },
   { value: 400_000, startHex: '#464d70', endHex: '#343a57', label: '400K-499K' },
@@ -37,16 +36,12 @@ const COLOR_STOPS = [
 
 const getColorForValue = (value, min, max) => {
   if (typeof value !== 'number' || isNaN(value)) return 'rgb(0,0,0)';
-
   const stop = COLOR_STOPS.find(s => value >= s.value) || COLOR_STOPS[COLOR_STOPS.length - 1];
   const nextStop = COLOR_STOPS[COLOR_STOPS.indexOf(stop) - 1];
-
   const rangeMin = stop.value;
   const rangeMax = nextStop ? nextStop.value : max;
-
   const startRGB = hexToRgb(stop.startHex);
   const endRGB = hexToRgb(stop.endHex);
-
   const t = Math.max(0, Math.min(1, (value - rangeMin) / (rangeMax - rangeMin)));
   const rgb = lerpColor(startRGB, endRGB, t);
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
@@ -132,7 +127,6 @@ function HeatmapLegend({ minValue, maxValue, height, scale, activeRange, onLegen
   );
 }
 
-// Separate container for the dropdown
 function DropdownContainer({ yAxisMode, setYAxisMode, height }) {
   return (
     <div style={{
@@ -170,8 +164,6 @@ function DropdownContainer({ yAxisMode, setYAxisMode, height }) {
   );
 }
 
-
-// MAIN TOPVOLUME WRAPPER:
 export default function TopVolume(props) {
   const [yAxisMode, setYAxisMode] = useState('Expiration Date');
   const [activeLegendRange, setActiveLegendRange] = useState(null);
@@ -219,10 +211,7 @@ export default function TopVolume(props) {
         width: '100%',
         height: '100%'
       }}>
-        {/* Separate dropdown container on the left */}
         <DropdownContainer yAxisMode={yAxisMode} setYAxisMode={setYAxisMode} height={props.maxHeight || MIN_HEIGHT} />
-
-        {/* Chart container */}
         <div style={{
           flexGrow: 1,
           position: 'relative',
@@ -234,8 +223,6 @@ export default function TopVolume(props) {
             ? <StrikePriceGrid {...props} expirationYLabelsCount={expirationYLabelsCount} activeLegendRange={activeLegendRange} />
             : <ExpirationGrid {...props} maxYLabels={expirationYLabelsCount} activeLegendRange={activeLegendRange} />}
         </div>
-
-        {/* Legend container on the right */}
         <HeatmapLegend
           minValue={minValue}
           maxValue={maxValue}
@@ -249,7 +236,6 @@ export default function TopVolume(props) {
   );
 }
 
-// --- MODE 1: Expiration Date ---
 function ExpirationGrid({
   data = [],
   filters = {},
@@ -276,7 +262,6 @@ function ExpirationGrid({
   );
 }
 
-// --- MODE 2: Strike Price ---
 function StrikePriceGrid({
   data = [],
   filters = {},
@@ -322,7 +307,6 @@ function StrikePriceGrid({
   );
 }
 
-// --- Core Heatmap Component ---
 function HeatmapCore({
   data = [],
   filters = {},
@@ -404,11 +388,40 @@ function HeatmapCore({
   }, [data, mode, maxStrikePrices]);
 
   const filteredData = useMemo(() => {
+    console.log("TopVolume: Filtering data, input trades count:", data.length);
+    console.log("TopVolume: Filters:", filters);
+    console.log("TopVolume: BlockTrade filter active:", !!filters?.BlockTrade);
+
+    if (data.length > 0) {
+      console.log("TopVolume: BlockTrade_IDs distribution:", 
+        data.reduce((acc, t) => {
+          const id = String(t.BlockTrade_IDs || 'undefined').trim();
+          acc[id] = (acc[id] || 0) + 1;
+          return acc;
+        }, {})
+      );
+    }
+
     const result = data.filter((item) => {
+      // Apply BlockTrade filter explicitly
+      if (filters?.BlockTrade) {
+        const isBlockTrade = item.BlockTrade_IDs && 
+                            String(item.BlockTrade_IDs).trim() !== "" &&
+                            String(item.BlockTrade_IDs) !== "null" && 
+                            String(item.BlockTrade_IDs) !== "-";
+        if (!isBlockTrade) {
+          console.log(`TopVolume: Trade ${item.Trade_ID} excluded by BlockTrade filter, BlockTrade_IDs: ${item.BlockTrade_IDs}`);
+          return false;
+        }
+      }
+
       const itemDate = item.Entry_Date ? new Date(item.Entry_Date) : null;
-      if (!itemDate || isNaN(itemDate.getTime())) return true;
+      if (!itemDate || isNaN(itemDate.getTime())) {
+        console.warn('TopVolume Invalid item.Entry_Date:', item.Entry_Date);
+        return true;
+      }
       return Object.entries(filters).every(([k, v]) => {
-        if (!v || (Array.isArray(v) && v.length === 0)) return true;
+        if (k === "BlockTrade" || !v || (Array.isArray(v) && v.length === 0)) return true;
         if (k === "Entry_Date") {
           const start = v.start ? new Date(v.start) : null;
           const end = v.end ? new Date(v.end) : null;
@@ -418,11 +431,30 @@ function HeatmapCore({
         }
         if ((k === "Size" || k === "Entry_Value") && Array.isArray(v)) {
           const [min, max] = v.map(Number), num = Number(item[k]);
-          return !isNaN(num) && num >= min && num <= max;
+          const passes = !isNaN(num) && num >= min && num <= max;
+          if (!passes) {
+            console.log(`TopVolume: Trade ${item.Trade_ID} failed filter ${k}=[${min}, ${max}], actual=${num}`);
+          }
+          return passes;
         }
-        return Array.isArray(v) ? v.includes(item[k]) : String(item[k]) === v;
+        const passes = Array.isArray(v) ? v.includes(item[k]) : String(item[k]) === v;
+        if (!passes) {
+          console.log(`TopVolume: Trade ${item.Trade_ID} failed filter ${k}=${v}, actual=${item[k]}`);
+        }
+        return passes;
       });
     });
+
+    console.log("TopVolume: Filtered trades count:", result.length);
+    if (result.length > 0) {
+      console.log("TopVolume: Filtered BlockTrade_IDs distribution:", 
+        result.reduce((acc, t) => {
+          const id = String(t.BlockTrade_IDs || 'undefined').trim();
+          acc[id] = (acc[id] || 0) + 1;
+          return acc;
+        }, {})
+      );
+    }
     return result;
   }, [data, filters]);
 
@@ -451,12 +483,12 @@ function HeatmapCore({
       agg[k].trades.push(row);
     }
     const plotData = Object.values(agg).filter(d => fixedXLabels.includes(d.x) && fixedYLabels.includes(d.y));
-    const allValues = data.map(row => +row.Entry_Value).filter(v => !isNaN(v));
+    const allValues = filteredData.map(row => +row.Entry_Value).filter(v => !isNaN(v));
     const minValue = allValues.length ? Math.min(...allValues) : 0;
     const maxValue = allValues.length ? Math.max(...allValues) : 0;
     const groupIndices = Array.from(new Set(fixedXLabels.map(lbl => lbl.split(' ')[0]))).map((_, idx) => idx * 3).slice(1);
     return { plotData, groupIndices, minValue, maxValue };
-  }, [filteredData, fixedXLabels, fixedYLabels, data, mode]);
+  }, [filteredData, fixedXLabels, fixedYLabels, mode]);
 
   const logicalCanvasWidth = fixedXLabels.length * segmentSizeX;
   const logicalCanvasHeight = fixedYLabels.length * segmentSizeY;
@@ -598,13 +630,11 @@ function HeatmapCore({
           const yScale = c.scales.y;
           if (!xScale || !yScale) return;
           for (const pt of plotData) {
-            // Apply the legend filter here
             if (activeLegendRange) {
-                if (+pt.value < activeLegendRange.start || +pt.value > activeLegendRange.end) {
-                    continue;
-                }
+              if (+pt.value < activeLegendRange.start || +pt.value > activeLegendRange.end) {
+                continue;
+              }
             }
-
             const xi = fixedXLabels.indexOf(pt.x), yi = fixedYLabels.indexOf(pt.y);
             if (xi === -1 || yi === -1) continue;
             let xLeft = xScale.getPixelForValue(xi), xRight = xScale.getPixelForValue(xi + 1);
@@ -685,11 +715,10 @@ function HeatmapCore({
         style={{
           position: 'absolute',
           left: 0,
-           top: 0,
+          top: 0,
           width: scaledYAxisWidth,
           height: canvasHeight,
           zIndex: 2,
-          
         }}
       >
         {fixedYLabels.map((lbl, i) => {

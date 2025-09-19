@@ -623,8 +623,14 @@ export default function DetailsBar({ activeTab,
         const allTrades = Object.values(groupedData).flat();
         const totalTrades = allTrades.length;
         const totalValue = allTrades.reduce((sum, t) => sum + (t.Entry_Value || 0), 0);
-        const totalBlockTrades = allTrades.reduce((sum, t) => sum + (t.BlockTrade_Count || 0), 0);
-
+        const totalBlockTrades = filters?.BlockTrade
+        ? totalTrades
+        : allTrades.reduce((sum, t) => {
+            const isBlockTrade = t.BlockTrade_IDs && 
+                                String(t.BlockTrade_IDs) !== "null" && 
+                                String(t.BlockTrade_IDs).trim() !== "-";
+            return sum + (isBlockTrade ? 1 : 0);
+        }, 0);
         return (
             <div style={styles.content}>
                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px', }}>
@@ -1022,7 +1028,11 @@ export default function DetailsBar({ activeTab,
                 <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px' }}>
                     <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
                         <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Timeframe </div>
-                        <span><CustomTooltip content={`Timeframe: From ${timeframe} days ago`}> {timeframe} days ago </CustomTooltip></span>
+                                <span>
+                        <CustomTooltip content={`Timeframe: From ${timeframe === 'today' ? 'today' : `${timeframe} day${timeframe === '1' ? '' : 's'} ago`}`}> 
+                            {timeframe === 'today' ? 'Today' : `${timeframe} day${timeframe === '1' ? '' : 's'} ago`} 
+                        </CustomTooltip>
+                    </span>
                     </div>
                     <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
                         <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> {yLabel} </div>

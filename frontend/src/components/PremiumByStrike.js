@@ -173,18 +173,31 @@ export default function PremiumByStrike({
     return allStrikes.sort((a, b) => a - b);
   }, [data]);
 
-  // Filter data per filters prop
+  // Filter data per filters prop, applying BlockTrade filter explicitly
   const filtered = useMemo(() => {
+
+
     const result = data.filter((item) => {
-      // Log item.Entry_Date for debugging
+      // Apply BlockTrade filter explicitly
+      if (filters?.BlockTrade) {
+        const isBlockTrade = item.BlockTrade_IDs && 
+                            String(item.BlockTrade_IDs).trim() !== "" &&
+                            String(item.BlockTrade_IDs) !== "null" && 
+                            String(item.BlockTrade_IDs) !== "-";
+        if (!isBlockTrade) {
+         return false;
+        }
+      }
+
       const itemDate = item.Entry_Date ? new Date(item.Entry_Date) : null;
       if (!itemDate || isNaN(itemDate.getTime())) {
-        console.warn('PremiumByStrike Invalid item.Entry_Date:', item.Entry_Date);
         return true; // Include items with invalid dates to avoid empty dataset
       }
-  
+
       return Object.entries(filters).every(([k, v]) => {
-        if (!v || (Array.isArray(v) && v.length === 0)) return true;
+        if (k === "BlockTrade" || !v || (Array.isArray(v) && v.length === 0)) {
+          return true; // Skip redundant BlockTrade check since handled above
+        }
         if (k === "Entry_Date") {
           if (!v || (!v.start && !v.end)) {
             console.log('PremiumByStrike No Entry_Date filter applied');
@@ -192,20 +205,12 @@ export default function PremiumByStrike({
           }
           const start = v.start ? new Date(v.start) : null;
           const end = v.end ? new Date(v.end) : null;
-  
-          // Log date comparison
-          console.log('PremiumByStrike Date Filter Comparison:', {
-            itemDate: item.Entry_Date,
-            start: v.start,
-            end: v.end,
-            isValidStart: start && !isNaN(start.getTime()),
-            isValidEnd: end && !isNaN(end.getTime()),
-          });
-  
-          // Skip invalid dates to prevent filtering out all data
+
+
+
           if (start && isNaN(start.getTime())) return true;
           if (end && isNaN(end.getTime())) return true;
-  
+
           return (
             (!start || itemDate >= start) &&
             (!end || itemDate <= end)
@@ -214,11 +219,16 @@ export default function PremiumByStrike({
         if ((k === "Size" || k === "Entry_Value") && Array.isArray(v)) {
           const [min, max] = v.map(Number),
             num = Number(item[k]);
-          return !isNaN(num) && num >= min && num <= max;
+          const passes = !isNaN(num) && num >= min && num <= max;
+
+          return passes;
         }
-        return Array.isArray(v) ? v.includes(item[k]) : String(item[k]) === v;
+        const passes = Array.isArray(v) ? v.includes(item[k]) : String(item[k]) === v;
+
+        return passes;
       });
     });
+
 
     return result;
   }, [data, filters]);

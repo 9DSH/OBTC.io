@@ -7,6 +7,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import DoneIcon from '@mui/icons-material/Done';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import Tooltip from '@mui/material/Tooltip';
 import { createPortal } from 'react-dom';
 import {
@@ -48,6 +49,7 @@ export const DEFAULT_FILTERS = {
   Entry_Value: [0, 100000000],
   Strike_Price: [],
   Expiration_Date: [],
+  BlockTrade: false,
 };
 
 const DatePickerPortal = ({ children }) => {
@@ -89,7 +91,7 @@ const formatValue = (value) => {
 export default function FilterBar({ filters, setFilters, options, data }) {
   const initialMaxSize = options.maxSize || DEFAULT_FILTERS.Size[1];
   const initialMaxEntryValue = options.maxEntryValue || DEFAULT_FILTERS.Entry_Value[1];
-  
+
   const getInitialLocalState = () => {
     return {
       ...filters,
@@ -100,20 +102,18 @@ export default function FilterBar({ filters, setFilters, options, data }) {
           }
         : { start: filters.Entry_Date ? new Date(filters.Entry_Date) : null, end: null },
       Size: filters.Size || [0.1, initialMaxSize],
-      Entry_Value: filters.Entry_Value || [0, initialMaxEntryValue]
+      Entry_Value: filters.Entry_Value || [0, initialMaxEntryValue],
+      BlockTrade: filters.BlockTrade || false,
     };
   };
 
   const [local, setLocal] = useState(getInitialLocalState);
 
-  // Set the default filter state based on the calculated maximums from parent
   useEffect(() => {
     setLocal(prevLocal => {
-      // Check if the current filter values are the old defaults
       const isDefaultSize = prevLocal.Size[1] === DEFAULT_FILTERS.Size[1];
       const isDefaultEntryValue = prevLocal.Entry_Value[1] === DEFAULT_FILTERS.Entry_Value[1];
 
-      // Update only if they are the old defaults
       if (isDefaultSize || isDefaultEntryValue) {
         return {
           ...prevLocal,
@@ -163,6 +163,45 @@ export default function FilterBar({ filters, setFilters, options, data }) {
   const handleEntrySlider = (_, v) =>
     setLocal((l) => ({ ...l, Entry_Value: v }));
 
+  const handleBlockTradeToggle = () => {
+    // Correct logic: Toggle the local state and then immediately apply the filters
+    setLocal((prevLocal) => {
+      const newBlockTradeValue = !prevLocal.BlockTrade;
+      const updatedLocalState = { ...prevLocal, BlockTrade: newBlockTradeValue };
+      
+      // Call handleApply with the updated local state
+      let f = { ...updatedLocalState };
+      if (f.Entry_Date.start || f.Entry_Date.end) {
+        const start = f.Entry_Date.start instanceof Date && !isNaN(f.Entry_Date.start.getTime())
+          ? new Date(f.Entry_Date.start)
+          : null;
+        const end = f.Entry_Date.end instanceof Date && !isNaN(f.Entry_Date.end.getTime())
+          ? new Date(f.Entry_Date.end)
+          : null;
+        if (start) start.setHours(0, 0, 0, 0);
+        if (end) end.setHours(23, 59, 59, 999);
+        if (start && end && end < start) {
+          f.Entry_Date = {
+            start: end.toISOString(),
+            end: start.toISOString(),
+          };
+        } else {
+          f.Entry_Date = {
+            start: start ? start.toISOString() : null,
+            end: end ? end.toISOString() : null,
+          };
+        }
+        if (!f.Entry_Date.start && !f.Entry_Date.end) {
+          f.Entry_Date = null;
+        }
+      } else {
+        f.Entry_Date = null;
+      }
+      setFilters(f);
+      return updatedLocalState;
+    });
+  };
+
   const handleApply = () => {
     let f = { ...local };
     if (f.Entry_Date.start || f.Entry_Date.end) {
@@ -180,14 +219,14 @@ export default function FilterBar({ filters, setFilters, options, data }) {
           end: start.toISOString(),
         };
       } else {
-        f.Entry_Date = {
-          start: start ? start.toISOString() : null,
-          end: end ? end.toISOString() : null,
-        };
-      }
-      if (!f.Entry_Date.start && !f.Entry_Date.end) {
-        f.Entry_Date = null;
-      }
+          f.Entry_Date = {
+            start: start ? start.toISOString() : null,
+            end: end ? end.toISOString() : null,
+          };
+        }
+        if (!f.Entry_Date.start && !f.Entry_Date.end) {
+          f.Entry_Date = null;
+        }
     } else {
       f.Entry_Date = null;
     }
@@ -252,6 +291,52 @@ export default function FilterBar({ filters, setFilters, options, data }) {
         width: '100%',
         maxWidth: '95vw',
       }}>
+        {/* BlockTrade Toggle Button */}
+        <Box
+          sx={{
+            mr: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <Tooltip
+            title={local.BlockTrade ? "Show All Trades" : "Show Block Trades Only"}
+            arrow
+            placement="left"
+            componentsProps={{
+              tooltip: {
+                sx: {
+                  bgcolor: 'var(--color-primary)',
+                  color: '#fff',
+                  fontSize: 12,
+                },
+              },
+              arrow: {
+                sx: {
+                  color: 'var(--color-primary)',
+                },
+              },
+            }}
+          >
+            <IconButton
+              onClick={handleBlockTradeToggle}
+              sx={{
+                backgroundColor: local.BlockTrade ? 'var(--color-primary)' : 'rgba(27, 28, 34, 0.7)',
+                '&:hover': { backgroundColor: local.BlockTrade ? 'var(--color-primary-hover)' : 'rgb(54, 56, 63)' },
+                backdropFilter: 'blur(10px)',
+                width: iconButtonSize,
+                height: iconButtonSize,
+                borderRadius: '20%',
+                border: '1px dotted rgba(91, 83, 83, 0.7)',
+              }}
+            >
+              <FilterAltIcon sx={{ color: '#fff', fontSize: 'clamp(1rem, 1vw, 2rem)' }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
         <Grid
           container
           spacing={1}
@@ -300,7 +385,7 @@ export default function FilterBar({ filters, setFilters, options, data }) {
                     },
                     '& .MuiOutlinedInput-notchedOutline': { borderColor: '#444' },
                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--color-primary)' },
-                    '& .MuiInputBase-root': { 
+                    '& .MuiInputBase-root': {
                       height: 'clamp(28px, 3.5vw, 32px)',
                       display: 'flex',
                       alignItems: 'center',
@@ -326,7 +411,7 @@ export default function FilterBar({ filters, setFilters, options, data }) {
                 '.MuiOutlinedInput-notchedOutline': { borderColor: '#444' },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--color-primary)' },
                 '.MuiSelect-icon': { color: '#bbb' },
-                '& .MuiSelect-select': { 
+                '& .MuiSelect-select': {
                   padding: 'clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.5rem, 1vw, 0.8rem)',
                   height: 'clamp(1px, 1vw, 1px)',
                   display: 'flex',
@@ -358,7 +443,7 @@ export default function FilterBar({ filters, setFilters, options, data }) {
                 '.MuiOutlinedInput-notchedOutline': { borderColor: '#444' },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--color-primary)' },
                 '.MuiSelect-icon': { color: '#bbb' },
-                '& .MuiSelect-select': { 
+                '& .MuiSelect-select': {
                   padding: 'clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.5rem, 1vw, 0.8rem)',
                   height: 'clamp(1px,1vw, 1px)',
                   display: 'flex',
@@ -489,7 +574,7 @@ export default function FilterBar({ filters, setFilters, options, data }) {
                 '.MuiOutlinedInput-notchedOutline': { borderColor: '#444' },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--color-primary)' },
                 '.MuiSelect-icon': { color: '#bbb' },
-                '& .MuiSelect-select': { 
+                '& .MuiSelect-select': {
                   padding: 'clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.5rem, 1vw, 0.8rem)',
                   height: 'clamp(1px, 1vw, 1px)',
                   display: 'flex',
@@ -527,7 +612,7 @@ export default function FilterBar({ filters, setFilters, options, data }) {
                 '.MuiOutlinedInput-notchedOutline': { borderColor: '#444' },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--color-primary)' },
                 '.MuiSelect-icon': { color: '#bbb' },
-                '& .MuiSelect-select': { 
+                '& .MuiSelect-select': {
                   padding: 'clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.5rem, 1vw, 0.8rem)',
                   height: 'clamp(1px, 1vw, 1px)',
                   display: 'flex',

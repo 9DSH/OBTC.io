@@ -14,8 +14,6 @@ const COLORS = {
 
 const MAX_BAR_HEIGHT = 300;
 const MAX_WIDTH = 900;
-// const BAR_WIDTH = 7; // Removed fixed width
-// const GAP_BETWEEN_BARS = 10; // Removed fixed gap
 const Y_AXIS_WIDTH = 30; // width reserved for Y axis labels
 const maxLabelWidth = 80; // approx px width needed per label to avoid overlap
 
@@ -38,19 +36,24 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-  
-  // Filter data based on filters prop
+
+  // Filter data based on filters prop, skipping BlockTrade
   const filteredData = useMemo(() => {
+
+
+
     const result = data.filter((item) => {
       // Log item.Entry_Date for debugging
       const itemDate = item.Entry_Date ? new Date(item.Entry_Date) : null;
       if (!itemDate || isNaN(itemDate.getTime())) {
-        console.warn('Invalid item.Entry_Date:', item.Entry_Date);
+        console.warn('PutCallDistribution: Invalid item.Entry_Date:', item.Entry_Date);
         return true; // Include items with invalid dates to avoid empty dataset
       }
 
       return Object.entries(filters).every(([key, value]) => {
-        if (!value || (Array.isArray(value) && value.length === 0)) return true;
+        if (key === "BlockTrade" || !value || (Array.isArray(value) && value.length === 0)) {
+          return true; // Skip BlockTrade filter
+        }
         if (key === "Entry_Date") {
           if (!value || (!value.start && !value.end)) {
             return true;
@@ -58,14 +61,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
           const start = value.start ? new Date(value.start) : null;
           const end = value.end ? new Date(value.end) : null;
 
-          // Log date comparison
-          console.log('Date Filter Comparison:', {
-            itemDate: item.Entry_Date,
-            start: value.start,
-            end: value.end,
-            isValidStart: start && !isNaN(start.getTime()),
-            isValidEnd: end && !isNaN(end.getTime()),
-          });
+
 
           // Skip invalid dates to prevent filtering out all data
           if (start && isNaN(start.getTime())) return true;
@@ -79,11 +75,21 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
         if ((key === "Size" || key === "Entry_Value") && Array.isArray(value)) {
           const [min, max] = value.map(Number);
           const val = Number(item[key]);
-          return !isNaN(val) && val >= min && val <= max;
+          const passes = !isNaN(val) && val >= min && val <= max;
+          if (!passes) {
+            console.log(`PutCallDistribution: Trade ${item.Trade_ID} failed filter ${key}=[${min}, ${max}], actual=${val}`);
+          }
+          return passes;
         }
-        return Array.isArray(value) ? value.includes(item[key]) : String(item[key]) === value;
+        const passes = Array.isArray(value) ? value.includes(item[key]) : String(item[key]) === value;
+        if (!passes) {
+          console.log(`PutCallDistribution: Trade ${item.Trade_ID} failed filter ${key}=${value}, actual=${item[key]}`);
+        }
+        return passes;
       });
     });
+
+
 
     return result;
   }, [data, filters]);
@@ -115,23 +121,20 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
   }, [data, filteredData]);
 
   if (strikePrices.length === 0) {
+    console.log("PutCallDistribution: No strike prices, rendering empty state");
     return <div style={{ color: "white", padding: 20 }}>No data to display.</div>;
   }
   
-  // NEW: Calculate dynamic bar dimensions here
+  // Calculate dynamic bar dimensions here
   const numBars = strikePrices.length;
-  // This is the total width available for the bars and gaps
-  const availableWidth = containerWidth; 
-  // We'll use a fixed ratio for bar-to-gap
-  const BAR_TO_GAP_RATIO = 3; 
-  const totalBarWidth = availableWidth * (BAR_TO_GAP_RATIO / (BAR_TO_GAP_RATIO + 1));
-  const totalGapWidth = availableWidth - totalBarWidth;
+  const BAR_TO_GAP_RATIO = 3;
+  const totalBarWidth = containerWidth * (BAR_TO_GAP_RATIO / (BAR_TO_GAP_RATIO + 1));
+  const totalGapWidth = containerWidth - totalBarWidth;
 
   const BAR_WIDTH = numBars > 0 ? totalBarWidth / numBars : 0;
   const GAP_BETWEEN_BARS = numBars > 1 ? totalGapWidth / (numBars - 1) : 0;
 
-
-  // 3) Compute scales & ticks
+  // Compute scales & ticks
   const maxStack = barsData.reduce(
     (max, bar) => Math.max(max, Object.values(bar).reduce((a, b) => a + b, 0)),
     0
@@ -152,7 +155,6 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
 
   // Calculate X-axis tick positions dynamically to avoid label overlap
   const maxLabels = Math.floor(containerWidth / maxLabelWidth);
-
   let skipInterval = 1;
   if (strikePrices.length > maxLabels) {
     skipInterval = Math.ceil(strikePrices.length / maxLabels);
@@ -261,7 +263,6 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
         margin: "0 auto",
         position: "relative",
         fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-
       }}
     >
       {/* Chart container */}
@@ -271,21 +272,19 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
           alignItems: "flex-end",
           height: MAX_BAR_HEIGHT + 40,
           position: "relative",
-          minWidth: "100%", // use full width of containerRef
-          
+          minWidth: "100%",
         }}
       >
         {/* Y Axis Title */}
         <div
           style={{
             width: 30,
-            height: MAX_BAR_HEIGHT, // fill full height of Y axis labels container
+            height: MAX_BAR_HEIGHT,
             display: "flex",
-            alignItems: "center", // vertical centering
+            alignItems: "center",
             justifyContent: "center",
             marginRight: 2,
             userSelect: "none",
-            
           }}
         >
           <div
@@ -357,7 +356,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
                 borderRadius: 4,
                 whiteSpace: "nowrap",
                 pointerEvents: "none",
-                zIndex: 10, // Lower from 20
+                zIndex: 10,
                 fontSize: 12,
                 opacity: 1,
               }}
@@ -417,7 +416,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
                   position: "absolute",
                   left: getBarLeftPosition(strike),
                   bottom: 0,
-                  width: BAR_WIDTH -3,
+                  width: BAR_WIDTH - 3,
                   display: "flex",
                   flexDirection: "column-reverse",
                   cursor: "pointer",
@@ -476,11 +475,11 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
           position: "relative",
           marginTop: 5,
           width: containerWidth,
-          height: 40, // increased height to make room for title
+          height: 40,
           userSelect: "none",
           fontSize: 11,
           color: "white",
-          marginLeft: Y_AXIS_WIDTH + 25, // align with bars container start
+          marginLeft: Y_AXIS_WIDTH + 25,
           marginRight: "auto",
         }}
       >
@@ -522,7 +521,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
               borderRadius: 4,
               whiteSpace: "nowrap",
               pointerEvents: "none",
-              zIndex: 10, // Lower from 20
+              zIndex: 10,
               opacity: 1,
             }}
           >
@@ -556,15 +555,15 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
           top: 10,
           right: 10,
           display: "flex",
-          flexDirection: "column", // Stack vertically
-          gap: 4, // Space between lines
+          flexDirection: "column",
+          gap: 4,
           fontSize: 10,
           userSelect: "none",
           backgroundColor: "var(--color-background-bar)",
           padding: "8px 12px",
           borderRadius: 6,
           fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-          zIndex: 15, // Lower from 30
+          zIndex: 15,
         }}
       >
         {Object.entries(COLORS).map(([label, color]) => (
@@ -582,7 +581,7 @@ export default function PutCallDistribution({ data = [], filters, onSegmentSelec
             position: "fixed",
             top: tooltip.y,
             left: tooltip.x,
-            zIndex: 500, // Lower from 1000
+            zIndex: 500,
             pointerEvents: "none",
           }}
         >

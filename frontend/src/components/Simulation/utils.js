@@ -206,13 +206,12 @@ export const updateTradePricing = (trade, chains) => {
       return { ...trade, price: '', iv_percent: '', delta: '', gamma: '', theta: '', vega: '' };
   }
   const chainData = chains.find(
-      item => {
-          const date = new Date(item.Expiration_Date);
-          const formattedDate = date.toISOString().split('T')[0];
-          return formattedDate === trade.expiration_date &&
-              item.Strike_Price === parseFloat(trade.strike_price) &&
-              item.Option_Type.toLowerCase() === trade.type.toLowerCase();
-      }
+    item => {
+      const date = new Date(item.Expiration_Date);
+      return date.toISOString().split('T')[0] === trade.expiration_date &&
+             item.Strike_Price === parseFloat(trade.strike_price) &&
+             item.Option_Type.toLowerCase() === trade.type.toLowerCase();
+    }
   );
 
   if (!chainData) {
@@ -222,7 +221,7 @@ export const updateTradePricing = (trade, chains) => {
 
   const isBuy = trade.side.toLowerCase() === 'buy';
   const price = isBuy ? chainData.Ask_Price_USD : chainData.Bid_Price_USD;
-  const iv = isBuy ? chainData.Ask_IV : chainData.Bid_IV;
+  const iv = isBuy ? chainData.Ask_IV || 35 : chainData.Bid_IV || 35;
 
   // Fetch Greek values directly from the chainData object
   const delta = chainData.Delta;
@@ -232,81 +231,87 @@ export const updateTradePricing = (trade, chains) => {
 
   return {
       ...trade,
-      price: price ? price.toString() : '',
-      iv_percent: iv ? (iv * 100).toFixed(2).toString() : '',
-      delta: delta ? delta.toString() : '',
-      gamma: gamma ? gamma.toString() : '',
-      theta: theta ? theta.toString() : '',
-      vega: vega ? vega.toString() : '',
+      price: price.toString(),
+      iv_percent: iv.toString(),
+      delta: delta.toString(),
+      gamma: gamma.toString() ,
+      theta: theta.toString() ,
+      vega: vega.toString(),
   };
 };
 
 
 export function getSelectedTrades(selectedOptions, chains, btcPrice) {
-    if (!chains || !Array.isArray(chains)) {
-      console.log('No chains data available for selectedTrades');
-      return [];
-    }
-    const now = new Date();
-    const selectedTrades = selectedOptions
-      .filter(option => option.isSelected)
-      .map((option, index) => {
-        const chainData = chains.find(
-          item => {
-            const date = new Date(item.Expiration_Date);
-            return date.toISOString().split('T')[0] === option.expiration_date &&
-                   item.Strike_Price === parseFloat(option.strike_price) &&
-                   item.Option_Type.toLowerCase() === option.type.toLowerCase();
-          }
-        );
-        if (!chainData) {
-          console.warn(`No chain data found for option:`, option);
-          return null;
-        }
-        const expDate = new Date(option.expiration_date + 'T00:00:00Z');
-        const timeToExpDays = (expDate - now) / (1000 * 60 * 60 * 24);
-        if (timeToExpDays <= 0) {
-          return null;
-        }
-        const isBuy = option.side.toLowerCase() === 'buy';
-        const priceUSD = parseFloat(option.price) || (isBuy ? chainData.Ask_Price_USD || 0 : chainData.Bid_Price_USD || 0);
-        const ivPercent = parseFloat(option.iv_percent) || (isBuy ? chainData.Ask_IV || 0 : chainData.Bid_IV || 0);
-        const delta = parseFloat(option.delta) || (isBuy ? chainData.Delta || 0 : -chainData.Delta || 0);
-        const gamma = parseFloat(option.gamma) || (chainData.Gamma || 0);
-        const theta = parseFloat(option.theta) || (chainData.Theta || 0);
-        const vega = parseFloat(option.vega) || (chainData.Vega || 0);
-        const size = parseFloat(option.size);
-        const underlyingPrice = parseFloat(option.underlying_price) ||
-          (btcPrice && btcPrice.btcprice && !isNaN(btcPrice.btcprice)
-            ? parseFloat(btcPrice.btcprice)
-            : 60000);
-        const entryValue = priceUSD * size;
-        const priceBTC = underlyingPrice ? (priceUSD / underlyingPrice) : 0;
-        const instrument = `BTC-${formatInstrumentExp(option.expiration_date)}-${option.strike_price}-${option.type[0]}`;
-        return {
-          BlockTrade_Count: 1,
-          BlockTrade_IDs: null,
-          ComboTrade_IDs: null,
-          Combo_ID: null,
-          Entry_Date: new Date().toISOString(),
-          Entry_Value: entryValue,
-          Expiration_Date: option.expiration_date + 'T00:00:00Z',
-          IV_Percent: ivPercent,
-          Instrument: instrument,
-          Option_Type: option.type,
-          Price_BTC: priceBTC,
-          Price_USD: parseFloat(formatToTwoDecimals(priceUSD)),
-          Side: option.side.toUpperCase(),
-          Size: size,
-          Strike_Price: parseFloat(option.strike_price),
-          Trade_ID: `trade-${index}-${option.expiration_date}-${option.strike_price}`,
-          Underlying_Price: parseFloat(formatToTwoDecimals(underlyingPrice)),
-          Delta: delta,
-          Gamma: gamma,
-          Theta: theta,
-          Vega: vega
-        };
-      })
-      .filter(trade => trade !== null);
-    return selectedTrades;
-}
+    if (!chains || !Array.isArray(chains)) {
+      console.log('No chains data available for selectedTrades');
+      return [];
+    }
+    const now = new Date();
+    const selectedTrades = selectedOptions
+      .filter(option => option.isSelected)
+      .map((option, index) => {
+        // Standardize the expiration date for comparison
+        const optionDate = new Date(option.expiration_date + 'T00:00:00Z');
+        const formattedOptionDate = optionDate.toISOString().split('T')[0];
+  
+        const chainData = chains.find(
+          item => {
+            const chainDate = new Date(item.Expiration_Date);
+            const formattedChainDate = chainDate.toISOString().split('T')[0];
+  
+            return formattedChainDate === formattedOptionDate &&
+                  item.Strike_Price === parseFloat(option.strike_price) &&
+                  item.Option_Type.toLowerCase() === option.type.toLowerCase();
+          }
+        );
+        if (!chainData) {
+          console.warn(`No chain data found for option:`, option);
+          return null;
+        }
+        const expDate = new Date(option.expiration_date + 'T00:00:00Z');
+        const timeToExpDays = (expDate - now) / (1000 * 60 * 60 * 24);
+        if (timeToExpDays <= 0) {
+          return null;
+        }
+        const isBuy = option.side.toLowerCase() === 'buy';
+        const priceUSD = parseFloat(option.price) || (isBuy ? chainData.Ask_Price_USD || 0 : chainData.Bid_Price_USD || 0);
+        const ivPercent = parseFloat(option.iv_percent) || (isBuy ? chainData.Ask_IV || 0 : chainData.Bid_IV || 0);
+        const delta = parseFloat(option.delta) || (isBuy ? chainData.Delta || 0 : -chainData.Delta || 0);
+        const gamma = parseFloat(option.gamma) || (chainData.Gamma || 0);
+        const theta = parseFloat(option.theta) || (chainData.Theta || 0);
+        const vega = parseFloat(option.vega) || (chainData.Vega || 0);
+        const size = parseFloat(option.size);
+        const underlyingPrice = parseFloat(option.underlying_price) ||
+          (btcPrice && btcPrice.btcprice && !isNaN(btcPrice.btcprice)
+            ? parseFloat(btcPrice.btcprice)
+            : 60000);
+        const entryValue = priceUSD * size;
+        const priceBTC = underlyingPrice ? (priceUSD / underlyingPrice) : 0;
+        const instrument = `BTC-${formatInstrumentExp(option.expiration_date)}-${option.strike_price}-${option.type[0]}`;
+        return {
+          BlockTrade_Count: 1,
+          BlockTrade_IDs: null,
+          ComboTrade_IDs: null,
+          Combo_ID: null,
+          Entry_Date: new Date().toISOString(),
+          Entry_Value: entryValue,
+          Expiration_Date: option.expiration_date + 'T00:00:00Z',
+          IV_Percent: ivPercent,
+          Instrument: instrument,
+          Option_Type: option.type,
+          Price_BTC: priceBTC,
+          Price_USD: priceUSD,
+          Side: option.side.toUpperCase(),
+          Size: size,
+          Strike_Price: parseFloat(option.strike_price),
+          Trade_ID: `trade-${index}-${option.expiration_date}-${option.strike_price}`,
+          Underlying_Price: underlyingPrice,
+          Delta: delta,
+          Gamma: gamma,
+          Theta: theta,
+          Vega: vega
+        };
+      })
+      .filter(trade => trade !== null);
+    return selectedTrades;
+  }

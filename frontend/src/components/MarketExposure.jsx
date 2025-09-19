@@ -393,8 +393,24 @@ const customTooltip = (context) => {
 
   const { offsetLeft: positionX, offsetTop: positionY } = context.chart.canvas;
   tooltipEl.style.opacity = '1';
-  tooltipEl.style.left = positionX + tooltipModel.caretX + 20+ 'px';
+  tooltipEl.style.left = positionX + tooltipModel.caretX + 20 + 'px';
   tooltipEl.style.top = positionY + tooltipModel.caretY + 'px';
+};
+
+// Helper function to calculate dynamic step size based on maxAbs value
+const calculateStepSize = (maxAbs) => {
+  let calculatedStepSize;
+  if (maxAbs <= 500) { calculatedStepSize = 100; } 
+  else if (maxAbs <= 1000) { calculatedStepSize = 250; } 
+  else if (maxAbs <= 5000) { calculatedStepSize = 500; } 
+  else if (maxAbs <= 10000) { calculatedStepSize = 1000; } 
+  else { calculatedStepSize = Math.ceil(maxAbs / 5000) * 1000; }
+  
+  if (maxAbs > 0 && calculatedStepSize > maxAbs) { calculatedStepSize = Math.floor(maxAbs / 2); }
+  if (calculatedStepSize < 50 && maxAbs > 0) { calculatedStepSize = 50; }
+  calculatedStepSize = Math.ceil(calculatedStepSize / 50) * 50;
+  
+  return calculatedStepSize;
 };
 
 export default function MarketExposure({ data = [], chains = [], filters = {}, onSegmentSelect }) {
@@ -411,16 +427,19 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
     }
   }, [chains]);
 
-  const { chartData, maxAbsOI, labels, dynamicStepSize, maxAbsNDE, maxAbsNGE, originalNdeData, originalNgeData } = useMemo(() => {
+  const { chartData, maxAbsOI, labels, dynamicStepSizeOI, maxAbsNDE, maxAbsNGE, dynamicStepSizeNDE, dynamicStepSizeNGE, dynamicStepSizeGreeks, originalNdeData, originalNgeData } = useMemo(() => {
     if (!Array.isArray(chains) || (chains.length === 0 && data.length === 0)) {
       setDateRange(null);
       return {
         chartData: { labels: [], datasets: [] },
         maxAbsOI: 0,
         labels: [],
-        dynamicStepSize: 50,
+        dynamicStepSizeOI: 50,
         maxAbsNDE: 0,
         maxAbsNGE: 0,
+        dynamicStepSizeNDE: 50,
+        dynamicStepSizeNGE: 50,
+        dynamicStepSizeGreeks: 50,
         originalNdeData: [],
         originalNgeData: []
       };
@@ -539,22 +558,16 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
     });
     const maxAbsNGE = maxTotalNGE || 1;
 
+    // Use the maximum of NDE and NGE for the shared y-axis scale
     const maxAbsGreeks = Math.max(maxAbsNDE, maxAbsNGE);
-    const scaleFactor = (maxAbsGreeks > 0 && maxAbsOI > 0) ? (maxAbsOI / maxAbsGreeks) : 1;
-    const normalizedNdeData = ndeData.map(val => val * scaleFactor);
-    const normalizedNgeData = ngeData.map(val => val * scaleFactor);
+    const scaleFactorNDE = (maxAbsGreeks > 0 && maxAbsNDE > 0) ? (maxAbsGreeks / maxAbsNDE) : 1;
+    const scaleFactorNGE = (maxAbsGreeks > 0 && maxAbsNGE > 0) ? (maxAbsGreeks / maxAbsNGE) : 1;
+    const normalizedNdeData = ndeData.map(val => val * scaleFactorNDE);
+    const normalizedNgeData = ngeData.map(val => val * scaleFactorNGE);
 
-    let calculatedStepSize;
-    if (maxAbsOI <= 500) { calculatedStepSize = 100; } 
-    else if (maxAbsOI <= 1000) { calculatedStepSize = 250; } 
-    else if (maxAbsOI <= 5000) { calculatedStepSize = 500; } 
-    else if (maxAbsOI <= 10000) { calculatedStepSize = 1000; } 
-    else { calculatedStepSize = Math.ceil(maxAbsOI / 5000) * 1000; }
-    
-    if (maxAbsOI > 0 && calculatedStepSize > maxAbsOI) { calculatedStepSize = Math.floor(maxAbsOI / 2); }
-    if (calculatedStepSize < 50 && maxAbsOI > 0) { calculatedStepSize = 50; }
-    calculatedStepSize = Math.ceil(calculatedStepSize / 50) * 50;
-    
+    const dynamicStepSizeOI = calculateStepSize(maxAbsOI);
+    const dynamicStepSizeGreeks = calculateStepSize(maxAbsGreeks);
+
     const chartDatasets = [
       {
         label: 'Put',
@@ -608,16 +621,19 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
       chartData: { labels: chartLabels, datasets: chartDatasets },
       maxAbsOI,
       labels: chartLabels,
-      dynamicStepSize: calculatedStepSize,
+      dynamicStepSizeOI,
       maxAbsNDE,
       maxAbsNGE,
+      dynamicStepSizeGreeks,
       originalNdeData: ndeData,
       originalNgeData: ngeData
     };
   }, [data, chains, filters, timeframe, chartMode]);
 
+
   const options = useMemo(() => {
     const yLimit = maxAbsOI * 1.1;
+    const greeksLimit = Math.max(maxAbsNDE, maxAbsNGE) * 1.1;
     const xTitle = chartMode === 'strikePrice' ? 'STRIKE PRICE' : 'EXPIRATION DATE';
 
     return {
@@ -737,7 +753,7 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
               if (Math.abs(value) < 1000) return value.toFixed(0);
               return `${(value / 1000).toFixed(1)}k`;
             },
-            stepSize: dynamicStepSize
+            stepSize: dynamicStepSizeOI
           },
           border: { display: true, color: 'rgba(114, 114, 114, 0.3)' },
           title: {
@@ -754,31 +770,41 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
           display: true,
           position: 'right',
           grid: { display: false },
-          min: -yLimit,
-          max: yLimit,
+          min: -greeksLimit,
+          max: greeksLimit,
           ticks: {
-            color: "rgba(251, 255, 0, 0.56)",
+            color: "#666",
             font: { size: 10 },
             fontFamily: "'Roboto',sans-serif",
-            padding: 5,
+            padding: 1,
             callback: (value) => {
-              const maxAbsGreeks = Math.max(maxAbsNDE, maxAbsNGE);
-              const scaleFactor = (maxAbsOI > 0 && maxAbsGreeks > 0) ? (maxAbsOI / maxAbsGreeks) : 1;
-              const originalValue = value / scaleFactor;
-              if (Math.abs(originalValue) >= 1000) {
-                return `${(originalValue / 1000).toFixed(1)}k`;
-              }
-              return originalValue.toFixed(0);
-            }
+              const maxGreek = Math.max(maxAbsNDE, maxAbsNGE);
+              const ngeValue = maxGreek > 0 ? (value * maxAbsNGE) / maxGreek : 0;
+              const ndeValue = maxGreek > 0 ? (value * maxAbsNDE) / maxGreek : 0;
+
+              const formattedNge = ngeValue >= 1000 || ngeValue <= -1000
+                ? `${(ngeValue / 1000).toFixed(1)}k`
+                : ngeValue.toFixed(2);
+              
+              const formattedNde = ndeValue >= 1000 || ndeValue <= -1000
+                ? `${(ndeValue / 1000).toFixed(1)}k`
+                : ndeValue.toFixed(0);
+
+              return `${formattedNge} | ${formattedNde}`;
+            },
+            stepSize: dynamicStepSizeGreeks
           },
           border: { display: true, color: 'rgba(114, 114, 114, 0.3)' },
           title: {
             display: true,
-            text: 'NDE / NGE',
-            color: COLORS.NDE,
-            font: { size: 12, weight: 500 },
-            fontFamily: "'Roboto',sans-serif",
-            padding: 1
+            text: [ 'Net Delta Exposure','Net Gamma Exposure'],
+            color: "#777",
+            font: [
+              { size: 12, weight: 500, family: "'Roboto',sans-serif" },
+              { size: 12, weight: 500, family: "'Roboto',sans-serif" }
+            ],
+            padding: { top: 10, bottom: 10 },
+            lineHeight: 1.5
           },
         },
       },
@@ -790,7 +816,6 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
 
         const { datasetIndex, index: dataIndex } = elements[0];
         
-        // Validate dataIndex
         if (dataIndex == null || dataIndex < 0 || dataIndex >= chartData.labels.length) {
           console.warn('Invalid dataIndex:', dataIndex, 'Labels length:', chartData.labels.length, chartData.labels);
           return;
@@ -806,7 +831,6 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
         const keyValue = isStrikeMode && typeof label === 'string' ? parseInt(label.replace('k', '') * 1000) : label;
         const formattedExpirationFilters = filters.Expiration_Date?.map(formatFilterDate) || [];
 
-        // Compute startDateThreshold for trade filtering
         const now = new Date();
         let startDateThreshold = new Date(now);
         startDateThreshold.setHours(0, 0, 0, 0);
@@ -829,7 +853,6 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
           ? data.filter(trade => new Date(trade.Entry_Date) >= startDateThreshold)
           : data;
 
-        // Group trades by Buy Call, Sell Call, Buy Put, Sell Put
         const groupedData = {
           'Buy Call': [],
           'Sell Call': [],
@@ -856,7 +879,6 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
             if (filters.Strike_Price && filters.Strike_Price.length > 0 && !filters.Strike_Price.includes(parsed.Strike_Price)) return;
           }
 
-          // Categorize the trade
           if (parsed.Option_Type === 'Call') {
             if (trade.Side === 'BUY') {
               groupedData['Buy Call'].push(trade);
@@ -902,7 +924,7 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
         event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
       }
     };
-  }, [maxAbsOI, maxAbsNDE, maxAbsNGE, labels, chartData, chartMode, dynamicStepSize, originalNdeData, originalNgeData, data, filters, timeframe, onSegmentSelect]);
+  }, [maxAbsOI, maxAbsNDE, maxAbsNGE, labels, chartData, chartMode, dynamicStepSizeOI, dynamicStepSizeNDE, dynamicStepSizeNGE, dynamicStepSizeGreeks, originalNdeData, originalNgeData, data, filters, timeframe, onSegmentSelect]);
 
   const handleTimeframeChange = (event) => {
     setTimeframe(event.target.value);

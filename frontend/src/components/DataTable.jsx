@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTable, useSortBy } from 'react-table';
-import { formatStrikeLabel} from "./utils/chartHelpers";
-
+import { formatStrikeLabel } from './utils/chartHelpers';
 import dayjs from 'dayjs';
 
 const numericColumns = [
@@ -113,11 +112,12 @@ const dateSortType = (rowA, rowB, columnId) => {
   return a > b ? 1 : a < b ? -1 : 0;
 };
 
-export default function DataTable({ data = [], filters }) {
+export default function DataTable({ data = [], filters = {} }) {
   const filteredData = useMemo(() => {
     return data.filter((item) => {
       const itemDate = item.Entry_Date ? new Date(item.Entry_Date) : null;
       if (!itemDate || isNaN(itemDate.getTime())) return true;
+
       return Object.entries(filters).every(([key, value]) => {
         if (
           value == null ||
@@ -139,6 +139,20 @@ export default function DataTable({ data = [], filters }) {
           const val = Number(item[key]);
           return !isNaN(val) && val >= min && val <= max;
         }
+        
+        // LOGIC CHECK FOR BLOCKTRADES
+        if (key === 'BlockTrade') {
+          const isBlockTradeFilterActive = !!value;
+          const blockId = item.BlockTrade_IDs;
+          const isBlockTradeValid = !!blockId && blockId.toString().trim() !== '-' && blockId.toString().trim().length > 0;
+
+          if (isBlockTradeFilterActive) {
+            return isBlockTradeValid;
+          }
+          return true;
+        }
+        // END OF LOGIC CHECK
+
         if (Array.isArray(value)) {
           return value.includes(item[key]);
         }
@@ -173,7 +187,9 @@ export default function DataTable({ data = [], filters }) {
         accessor: (row) => toValidDate(row.Expiration_Date),
         id: 'Expiration_Date',
         minWidth: columnClamp.Expiration_Date,
-        Cell: ({ row }) => <span>{formatExpire(row.original.Expiration_Date)}</span>,
+        Cell: ({ row }) => (
+          <span>{formatExpire(row.original.Expiration_Date)}</span>
+        ),
         sortType: dateSortType,
       },
       {
@@ -188,7 +204,6 @@ export default function DataTable({ data = [], filters }) {
         minWidth: columnClamp.Option_Type,
         sortType: 'alphanumeric',
       },
-
       ...numericColumns.map((col) => ({
         Header: col.replace(/_/g, ' '),
         accessor: col,
@@ -207,24 +222,20 @@ export default function DataTable({ data = [], filters }) {
         },
         sortType: numericSortType,
       })),
-
       {
         Header: 'Block ID',
         accessor: 'BlockTrade_IDs',
         Cell: ({ value }) => {
-          if (!value) return '-';
-          // If it's a string like "BLOCK-216039"
-          if (typeof value === "string") {
-            return value.replace(/^BLOCK-/, ""); 
+          if (!value || value === '-') return '-';
+          if (typeof value === 'string') {
+            return value.replace(/^BLOCK-/, '');
           }
-          // If it's an array of IDs
           if (Array.isArray(value)) {
-            return value.map(v => v.replace(/^BLOCK-/, "")).join(", ");
+            return value.map((v) => v.replace(/^BLOCK-/, '')).join(', ');
           }
-
           return value;
         },
-      }
+      },
     ],
     []
   );
@@ -257,117 +268,127 @@ export default function DataTable({ data = [], filters }) {
     0
   );
 
-    // ✅ Get date range
   const entryDates = filteredData
-  .map(t => toValidDate(t.Entry_Date))
-  .filter(d => d.getFullYear() > 1900); // ignore invalid dates
+    .map((t) => toValidDate(t.Entry_Date))
+    .filter((d) => d.getFullYear() > 1900);
 
   const minDate = entryDates.length ? new Date(Math.min(...entryDates)) : null;
   const maxDate = entryDates.length ? new Date(Math.max(...entryDates)) : null;
 
   const formatRangeDate = (d) =>
-  d ? dayjs(d).format('DD MMM YY').toUpperCase() : '-';
+    d ? dayjs(d).format('DD MMM YY').toUpperCase() : '-';
 
   return (
-    <div >
-  {/* ----------------- Metrics Row ----------------- */}
-        <div
+    <div>
+      <div
         style={{
           borderRadius: 8,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          textAlign: "center",
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          textAlign: 'center',
           marginTop: '0.5rem',
         }}
       >
         <div
           style={{
-            width: "200px",
-            alignItems: "center",
-            justifyContent: "center",
-            display: "flex",
-            flexDirection: "column",
-            textAlign: "center",
-            borderRight: '1px solid #333', // separator
+            width: '200px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            textAlign: 'center',
+            borderRight: '1px solid #333',
           }}
         >
-        <div
-          style={{
-            whiteSpace: "pre-line",
-            fontWeight: 400,
-            fontSize: "clamp(0.5rem, 1vw, 0.75rem)",
-            color: "white",
-            fontFamily: "'Roboto', sans-serif",
-            letterSpacing: '0.1rem'
-          }}
-        >
-          {formatRangeDate(minDate)} - {formatRangeDate(maxDate)}
           <div
             style={{
+              whiteSpace: 'pre-line',
               fontWeight: 400,
-              fontSize: "clamp(0.5rem, 0.9vw, 0.6rem)",
-              color: "gray",
+              fontSize: 'clamp(0.5rem, 1vw, 0.75rem)',
+              color: 'white',
               fontFamily: "'Roboto', sans-serif",
+              letterSpacing: '0.1rem',
             }}
           >
-            Date Range
+            {formatRangeDate(minDate)} - {formatRangeDate(maxDate)}
+            <div
+              style={{
+                fontWeight: 400,
+                fontSize: 'clamp(0.5rem, 0.9vw, 0.6rem)',
+                color: 'gray',
+                fontFamily: "'Roboto', sans-serif",
+              }}
+            >
+              Date Range
+            </div>
           </div>
         </div>
-      </div>
-        <div style={{
-                width: "100px",
-                alignItems: "center",
-                justifyContent: "center",
-                display: "flex",
-                flexDirection: "column",
-                textAlign: "center",
-                borderRight: '1px solid #333'
-              }}>
-          <div style={{
-                    whiteSpace: "pre-line",
-                    fontWeight: 400,
-                    fontSize: "clamp(0.6rem, 1vw, 0.8rem)",
-                    color: "white",
-                    fontFamily: "'Roboto', sans-serif",
-                    letterSpacing: '0.1rem'
-                  }}>
-            { formatStrikeLabel(totalTrades)}
-            <div style={{
-                        fontWeight: 400,
-                        fontSize: "clamp(0.5rem, 0.9vw, 0.6rem)",
-                        color: "gray",
-                        fontFamily: "'Roboto', sans-serif",
-                      }}>
-                        Positions</div>
+        <div
+          style={{
+            width: '100px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            textAlign: 'center',
+            borderRight: '1px solid #333',
+          }}
+        >
+          <div
+            style={{
+              whiteSpace: 'pre-line',
+              fontWeight: 400,
+              fontSize: 'clamp(0.6rem, 1vw, 0.8rem)',
+              color: 'white',
+              fontFamily: "'Roboto', sans-serif",
+              letterSpacing: '0.1rem',
+            }}
+          >
+            {formatStrikeLabel(totalTrades)}
+            <div
+              style={{
+                fontWeight: 400,
+                fontSize: 'clamp(0.5rem, 0.9vw, 0.6rem)',
+                color: 'gray',
+                fontFamily: "'Roboto', sans-serif",
+              }}
+            >
+              Positions
+            </div>
           </div>
         </div>
-
-        <div style={{
-                  width: "100px",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  display: "flex",
-                  flexDirection: "column",
-                  textAlign: "center",
-                }}>
-          <div style={{
-                    whiteSpace: "pre-line",
-                    fontWeight: 400,
-                    fontSize: "clamp(0.6rem, 1vw, 0.8rem)",
-                    color: "white",
-                    fontFamily: "'Roboto', sans-serif",
-                    
-                    letterSpacing: '0.1rem'
-                  }}>
-            { formatStrikeLabel(totalEntryValue)}
-            <div style={{
-                  fontWeight: 400,
-                  fontSize: "clamp(0.5rem, 0.9vw, 0.6rem)",
-                  color: "gray",
-                  fontFamily: "'Roboto', sans-serif",
-                }}>
-                  Entry Value</div>
+        <div
+          style={{
+            width: '100px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              whiteSpace: 'pre-line',
+              fontWeight: 400,
+              fontSize: 'clamp(0.6rem, 1vw, 0.8rem)',
+              color: 'white',
+              fontFamily: "'Roboto', sans-serif",
+              letterSpacing: '0.1rem',
+            }}
+          >
+            {formatStrikeLabel(totalEntryValue)}
+            <div
+              style={{
+                fontWeight: 400,
+                fontSize: 'clamp(0.5rem, 0.9vw, 0.6rem)',
+                color: 'gray',
+                fontFamily: "'Roboto', sans-serif",
+              }}
+            >
+              Entry Value
+            </div>
           </div>
         </div>
       </div>
@@ -387,7 +408,7 @@ export default function DataTable({ data = [], filters }) {
             display: 'inline-table',
             borderCollapse: 'separate',
             borderSpacing: 0,
-            tableLayout: 'auto', // Changed to auto for responsiveness
+            tableLayout: 'auto',
             backgroundColor: '#1b1c22',
             borderRadius: '12px',
             boxShadow: '0 6px 16px rgba(27,28,34,0.8)',
@@ -409,7 +430,7 @@ export default function DataTable({ data = [], filters }) {
                       color: '#d1d1e0',
                       padding: 'clamp(8px, 1vw, 10px) clamp(10px, 1.5vw, 12px)',
                       borderBottom: '2px solid #3a3b44',
-                      width: col.minWidth, // Use width instead of minWidth
+                      width: col.minWidth,
                       textAlign: 'center',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -446,7 +467,9 @@ export default function DataTable({ data = [], filters }) {
                       >
                         {col.isSortedDesc ? '▼' : '▲'}
                         {sortBy.length > 1 && (
-                          <sup>{sortBy.findIndex((x) => x.id === col.id) + 1}</sup>
+                          <sup>
+                            {sortBy.findIndex((x) => x.id === col.id) + 1}
+                          </sup>
                         )}
                       </span>
                     )}
@@ -473,25 +496,20 @@ export default function DataTable({ data = [], filters }) {
             ) : (
               visible.map((row, i) => {
                 prepareRow(row);
-
-
                 return (
                   <tr
                     {...row.getRowProps()}
                     key={row.id}
                     style={{
-                      backgroundColor:  i % 2 === 0 
-                      ? '#22232c' 
-                      : '#1e1f27',
+                      backgroundColor: i % 2 === 0 ? '#22232c' : '#1e1f27',
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor = 'var(--color-primary-hover)')
+                      (e.currentTarget.style.backgroundColor =
+                        'var(--color-primary-hover)')
                     }
                     onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor = 
-                         i % 2 === 0
-                        ? '#22232c'
-                        : '#1e1f27')
+                      (e.currentTarget.style.backgroundColor =
+                        i % 2 === 0 ? '#22232c' : '#1e1f27')
                     }
                   >
                     {row.cells.map((cell) => (
@@ -503,7 +521,11 @@ export default function DataTable({ data = [], filters }) {
                           color: '#e0e0f0',
                           width: cell.column.minWidth,
                           textAlign: 'center',
-                          whiteSpace: cell.column.id === 'Instrument' && window.innerWidth < 480 ? 'normal' : 'nowrap',
+                          whiteSpace:
+                            cell.column.id === 'Instrument' &&
+                            window.innerWidth < 480
+                              ? 'normal'
+                              : 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           fontSize: 'clamp(7px, 1.2vw, 12px)',

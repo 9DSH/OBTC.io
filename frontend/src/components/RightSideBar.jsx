@@ -783,22 +783,23 @@ export default function RightSideBar({ activeTab, selectedSegment, filters, cont
                   <button
                     style={{
                       ...styles.toggleButton,
-                      backgroundColor: viewMode === 'combo' ? 'var(--color-primary)' : 'transparent',
-                      color: viewMode === 'combo' ? '#fff' : '#aaa',
-                    }}
-                    onClick={() => setViewMode('combo')}
-                  >
-                    Public Trades
-                  </button>
-                  <button
-                    style={{
-                      ...styles.toggleButton,
                       backgroundColor: viewMode === 'block' ? 'var(--color-primary)' : 'transparent',
                       color: viewMode === 'block' ? '#fff' : '#aaa',
                     }}
                     onClick={() => setViewMode('block')}
                   >
                     Block Trades
+                  </button>
+                  
+                  <button
+                    style={{
+                      ...styles.toggleButton,
+                      backgroundColor: viewMode === 'combo' ? 'var(--color-primary)' : 'transparent',
+                      color: viewMode === 'combo' ? '#fff' : '#aaa',
+                    }}
+                    onClick={() => setViewMode('combo')}
+                  >
+                    Public Trades
                   </button>
                 </div>
                 <div style={styles.sortRow}>

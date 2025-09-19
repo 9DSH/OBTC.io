@@ -1,4 +1,5 @@
 // src/utils/strategiesUtils.js
+
 export function formatNumberKM(value) {
   const absValue = Math.abs(value);
   if (absValue >= 1000000) {
@@ -9,26 +10,44 @@ export function formatNumberKM(value) {
   return `${Math.round(value)}`;
 }
 
-
 export function filterStrategies(trades, filters = {}) {
+
+  if (!trades || trades.length === 0) {
+    return [];
+  }
+
   const strategyGroups = {};
+  let skippedTrades = 0;
 
   // Group trades
-  for (const trade of trades) {
+  for (let i = 0; i < trades.length; i++) {
+    const trade = trades[i];
     let groupKey;
-    if (trade.ComboTrade_IDs && trade.ComboTrade_IDs !== "null") {
-      groupKey = `combo:${trade.ComboTrade_IDs}`;
-    } else if (
-      trade.Combo_ID && trade.Combo_ID !== "null" &&
-      trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null"
-    ) {
-      groupKey = `combo_id:${trade.Combo_ID}:block:${trade.BlockTrade_IDs}`;
-    } else if (trade.Combo_ID && trade.Combo_ID !== "null") {
-      groupKey = `combo_id:${trade.Combo_ID}`;
-    } else if (trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null") {
-      groupKey = `block:${trade.BlockTrade_IDs}`;
+
+    if (filters.BlockTrade) {
+      // For block trades, prioritize BlockTrade_IDs, fallback to custom for single trades
+      if (trade.BlockTrade_IDs && String(trade.BlockTrade_IDs) !== "null" && String(trade.BlockTrade_IDs).trim() !== "-") {
+        groupKey = `block:${trade.BlockTrade_IDs}`;
+      } else {
+        groupKey = `custom:${trade.Trade_ID || trade.id || `trade_${i}`}`;
+      }
     } else {
-      continue; // skip single trades
+      // Original grouping logic for non-block trades
+      if (trade.ComboTrade_IDs && trade.ComboTrade_IDs !== "null") {
+        groupKey = `combo:${trade.ComboTrade_IDs}`;
+      } else if (
+        trade.Combo_ID && trade.Combo_ID !== "null" &&
+        trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null"
+      ) {
+        groupKey = `combo_id:${trade.Combo_ID}:block:${trade.BlockTrade_IDs}`;
+      } else if (trade.Combo_ID && trade.Combo_ID !== "null") {
+        groupKey = `combo_id:${trade.Combo_ID}`;
+      } else if (trade.BlockTrade_IDs && trade.BlockTrade_IDs !== "null") {
+        groupKey = `block:${trade.BlockTrade_IDs}`;
+      } else {
+        skippedTrades++;
+        continue; // Skip single trades in default mode
+      }
     }
 
     if (!strategyGroups[groupKey]) {
@@ -38,11 +57,10 @@ export function filterStrategies(trades, filters = {}) {
   }
 
 
-  // Apply filters: keep group if ANY trade matches filters
   const filteredGroups = Object.values(strategyGroups).filter(group => {
     const groupMatch = group.some(trade => {
       return Object.entries(filters).every(([key, value]) => {
-        if (!value || (Array.isArray(value) && value.length === 0)) return true;
+        if (key === "BlockTrade" || !value || (Array.isArray(value) && value.length === 0)) return true;
 
         let result = true;
 
@@ -90,7 +108,6 @@ export function filterStrategies(trades, filters = {}) {
               tradeDate &&
               (!start || tradeDate >= start) &&
               (!end || tradeDate <= end);
-
             break;
           }
 
@@ -105,7 +122,7 @@ export function filterStrategies(trades, filters = {}) {
             result = Array.isArray(value)
               ? value.includes(trade.Option_Type)
               : String(trade.Option_Type) === String(value);
-           break;
+            break;
           }
 
           default: {
@@ -119,138 +136,136 @@ export function filterStrategies(trades, filters = {}) {
       });
     });
 
-
     return groupMatch;
   });
 
 
-  // Return only groups with more than one trade
-  return filteredGroups.filter(group => group.length > 1);
+  // Return groups based on BlockTrade filter
+  const finalGroups = filters.BlockTrade
+    ? filteredGroups // Include single-trade groups for block trades
+    : filteredGroups.filter(group => group.length > 1); // Only multi-trade groups for default
+
+  return finalGroups;
 }
 
-  
 export function formatStrategyDisplay(rawName, trades = []) {
-    if (!rawName || typeof rawName !== "string" || rawName.startsWith("Custom-")) {
+
+  if (!rawName || typeof rawName !== "string" || rawName.startsWith("Custom-")) {
     if (trades.length >= 2) {
-            const strikes = [...new Set(trades.map(t => t.Strike_Price))].sort((a, b) => a - b);
-            const optionTypes = [...new Set(trades.map(t => t.Option_Type?.toLowerCase()))];
-            const sides = [...new Set(trades.map(t => t.Side))];
-            // Extract and validate expiration dates
-            const expirations = [...new Set(trades
-              .map(t => {
-                const instrument = t.Instrument;
-                if (!instrument || typeof instrument !== 'string') {
-                  return null;
-                }
-                const parts = instrument.split('-');
-                if (parts.length < 4) {
-                  return null;
-                }
-                return parts[1]; // Correctly extract expiry, e.g., '26SEP25'
-              })
-              .filter(exp => exp && /^\d{2}[A-Z]{3}\d{2}$/.test(exp)) // Validate DDMMMYY format
-            )];
-            let strategyType = "Custom Strategy";
-            if (trades.length === 4 && strikes.length >= 4 && optionTypes.includes('call') && optionTypes.includes('put') && sides.includes('BUY') && sides.includes('SELL')) {
-              strategyType = "Iron Condor";
-            } else if (trades.length === 3 && strikes.length === 3 && optionTypes.length === 1 && sides.includes('BUY') && sides.includes('SELL')) {
-              strategyType = "Butterfly";
-            } else if (trades.length === 2 && strikes.length === 2 && optionTypes.length === 1 && sides.includes('BUY') && sides.includes('SELL')) {
-              strategyType = "Vertical Spread";
-            }
-            const formattedStrikes = strikes.map(strike => {
-              const trade = trades.find(t => t.Strike_Price === strike);
-              const optionType = trade?.Option_Type?.toUpperCase() === 'PUT' ? 'P' : 'C';
-              return formatStrikeOption(`${strike}${optionType}`);
-            }).join(" | ");
-            let expiry = "Unknown";
-            if (expirations.length === 0) {
-            } else if (expirations.length === 1) {
-              const exp = expirations[0];
-              expiry = `${exp.slice(0, 2)} ${exp.slice(2, 5)} ${exp.slice(5)}`;
-            } else if (expirations.length >= 2) {
-              const expCounts = expirations.reduce((acc, exp) => {
-                acc[exp] = (acc[exp] || 0) + trades.filter(t => t.Instrument?.split('-')[1] === exp).length;
-                return acc;
-              }, {});
-              const topExpirations = Object.entries(expCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 2)
-                .map(([exp]) => `${exp.slice(0, 2)} ${exp.slice(2, 5)} ${exp.slice(5)}`);
-              expiry = topExpirations.join(" | ");
-              if (expirations.length > 2) {
-                expiry += " and multiple";
-              }
-            }
-            return [strategyType, formattedStrikes, expiry];
+      const strikes = [...new Set(trades.map(t => t.Strike_Price))].sort((a, b) => a - b);
+      const optionTypes = [...new Set(trades.map(t => t.Option_Type?.toLowerCase()))];
+      const sides = [...new Set(trades.map(t => t.Side))];
+      // Extract and validate expiration dates
+      const expirations = [...new Set(trades
+        .map(t => {
+          const instrument = t.Instrument;
+          if (!instrument || typeof instrument !== 'string') {
+            return null;
           }
-          return ["Custom Strategy", "N/A", "N/A"];
+          const parts = instrument.split('-');
+          if (parts.length < 4) {
+            return null;
+          }
+          return parts[1]; // Correctly extract expiry, e.g., '26SEP25'
+        })
+        .filter(exp => exp && /^\d{2}[A-Z]{3}\d{2}$/.test(exp)) // Validate DDMMMYY format
+      )];
+      let strategyType = "Custom Strategy";
+      if (trades.length === 4 && strikes.length >= 4 && optionTypes.includes('call') && optionTypes.includes('put') && sides.includes('BUY') && sides.includes('SELL')) {
+        strategyType = "Iron Condor";
+      } else if (trades.length === 3 && strikes.length === 3 && optionTypes.length === 1 && sides.includes('BUY') && sides.includes('SELL')) {
+        strategyType = "Butterfly";
+      } else if (trades.length === 2 && strikes.length === 2 && optionTypes.length === 1 && sides.includes('BUY') && sides.includes('SELL')) {
+        strategyType = "Vertical Spread";
+      }
+      const formattedStrikes = strikes.map(strike => {
+        const trade = trades.find(t => t.Strike_Price === strike);
+        const optionType = trade?.Option_Type?.toUpperCase() === 'PUT' ? 'P' : 'C';
+        return formatStrikeOption(`${strike}${optionType}`);
+      }).join(" | ");
+      let expiry = "Unknown";
+      if (expirations.length === 0) {
+      } else if (expirations.length === 1) {
+        const exp = expirations[0];
+        expiry = `${exp.slice(0, 2)} ${exp.slice(2, 5)} ${exp.slice(5)}`;
+      } else if (expirations.length >= 2) {
+        const expCounts = expirations.reduce((acc, exp) => {
+          acc[exp] = (acc[exp] || 0) + trades.filter(t => t.Instrument?.split('-')[1] === exp).length;
+          return acc;
+        }, {});
+        const topExpirations = Object.entries(expCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 2)
+          .map(([exp]) => `${exp.slice(0, 2)} ${exp.slice(2, 5)} ${exp.slice(5)}`);
+        expiry = topExpirations.join(" | ");
+        if (expirations.length > 2) {
+          expiry += " and multiple";
         }
-        const parts = rawName.split("-");
-        if (parts.length < 4) {
-          return ["Custom Strategy", "N/A", "N/A"];
-        }
-      
-        const [, strategyCode, rawDate, strikesRaw] = parts;
-      
-        // Map strategy code to full name
-        let strategyType = "";
-        if (strategyCode.includes("ICOND")) strategyType = "Iron Condor";
-        else if (strategyCode.includes("IB")) strategyType = "Iron Butterfly";
-        else if (strategyCode.includes("VS")) strategyType = "Vertical Spread";
-        else if (strategyCode.includes("PLAD")) strategyType = "Put Backspread";
-        else if (strategyCode.includes("STD")) strategyType = "Straddle";
-        else if (strategyCode.includes("STG")) strategyType = "Strangle";
-        else if (strategyCode.includes("CS")) strategyType = "Calendar Spread";
-        else if (strategyCode.includes("DS")) strategyType = "Diagonal Spread";
-        else if (strategyCode.includes("CDIAG")) strategyType = "Conditional Diagonal Spread";
-        else if (strategyCode.includes("PCAL")) strategyType = "Put Calendar Spread";
-        else if (strategyCode.includes("PBUT")) strategyType = "Put Butterfly Spread";
-        else if (strategyCode.includes("CCAL")) strategyType = "Call Calendar Spread";
-        else if (strategyCode.includes("STRD")) strategyType = "Straddle (Same Strike)";
-        else if (strategyCode.includes("STRG")) strategyType = "Straddle (Different Strike)";
-        else if (strategyCode.includes("PS")) strategyType = "Put Spread";
-        else if (strategyCode.includes("RR")) strategyType = "Risk Reversal";
-        else if (strategyCode.includes("PDIAG")) strategyType = "Put Diagonal Spread";
-        else if (strategyCode.includes("CBUT")) strategyType = "Call Butterfly Spread";
-        else if (strategyCode.includes("BF")) strategyType = "Butterfly";
-        else strategyType = strategyCode; // fallback
-  
-    // Helper to format a single strike with color span based on side
-    function formatStrikeOption(strikeRaw) {
-      // strikeRaw example: "118000C" or "124000P"
-      // Extract strike price and option type from strikeRaw
-      const strikeNumMatch = strikeRaw.match(/\d+/);
-      if (!strikeNumMatch) return strikeRaw;
-      const strikeNum = Number(strikeNumMatch[0]);
-  
-      const strikeK = (strikeNum / 1000).toFixed(0) + "K";
-  
-      // Option type (C or P) and full name
-      const optionType = strikeRaw.toUpperCase().endsWith("P") ? "Put" : "Call";
-  
-      // Find trade matching this strike and option type to get side (BUY/SELL)
-      const trade = trades.find(
-        t =>
-          t.Strike_Price === strikeNum &&
-          t.Option_Type &&
-          t.Option_Type.toLowerCase() === optionType.toLowerCase()
-      );
-  
-      const side = trade ? trade.Side : "UNKNOWN";
-      const color = side === "BUY" ? "rgb(45, 148, 78)" : side === "SELL" ? "rgb(189, 51, 51)" : "gray";
-  
-      return `<span style="color:${color}; font-weight:bold;">${strikeK} ${optionType}</span>`;
+      }
+      return [strategyType, formattedStrikes, expiry];
     }
-  
-    // Split strikesRaw by "_" and format each with color
-    const strikeParts = strikesRaw.split("_").map(formatStrikeOption);
-    const formattedStrikes = strikeParts.join(" | ");
-  
-    // Format date: 29AUG25 => 29 AUG 25
-    const formattedDate = `${rawDate.slice(0, 2)} ${rawDate.slice(2, 5)} ${rawDate.slice(5)}`;
-    
-    return [strategyType, formattedStrikes, formattedDate];
+    return ["Custom Strategy", "N/A", "N/A"];
+  }
+  const parts = rawName.split("-");
+  if (parts.length < 4) {
+    return ["Custom Strategy", "N/A", "N/A"];
+  }
+
+  const [, strategyCode, rawDate, strikesRaw] = parts;
+
+  // Map strategy code to full name
+  let strategyType = "";
+  if (strategyCode.includes("ICOND")) strategyType = "Iron Condor";
+  else if (strategyCode.includes("IB")) strategyType = "Iron Butterfly";
+  else if (strategyCode.includes("VS")) strategyType = "Vertical Spread";
+  else if (strategyCode.includes("PLAD")) strategyType = "Put Backspread";
+  else if (strategyCode.includes("STD")) strategyType = "Straddle";
+  else if (strategyCode.includes("STG")) strategyType = "Strangle";
+  else if (strategyCode.includes("CS")) strategyType = "Calendar Spread";
+  else if (strategyCode.includes("DS")) strategyType = "Diagonal Spread";
+  else if (strategyCode.includes("CDIAG")) strategyType = "Conditional Diagonal Spread";
+  else if (strategyCode.includes("PCAL")) strategyType = "Put Calendar Spread";
+  else if (strategyCode.includes("PBUT")) strategyType = "Put Butterfly Spread";
+  else if (strategyCode.includes("CCAL")) strategyType = "Call Calendar Spread";
+  else if (strategyCode.includes("STRD")) strategyType = "Straddle (Same Strike)";
+  else if (strategyCode.includes("STRG")) strategyType = "Straddle (Different Strike)";
+  else if (strategyCode.includes("PS")) strategyType = "Put Spread";
+  else if (strategyCode.includes("RR")) strategyType = "Risk Reversal";
+  else if (strategyCode.includes("PDIAG")) strategyType = "Put Diagonal Spread";
+  else if (strategyCode.includes("CBUT")) strategyType = "Call Butterfly Spread";
+  else if (strategyCode.includes("BF")) strategyType = "Butterfly";
+  else strategyType = strategyCode; // fallback
+
+  // Helper to format a single strike with color span based on side
+  function formatStrikeOption(strikeRaw) {
+    // strikeRaw example: "118000C" or "124000P"
+    const strikeNumMatch = strikeRaw.match(/\d+/);
+    if (!strikeNumMatch) return strikeRaw;
+    const strikeNum = Number(strikeNumMatch[0]);
+
+    const strikeK = (strikeNum / 1000).toFixed(0) + "K";
+
+    const optionType = strikeRaw.toUpperCase().endsWith("P") ? "Put" : "Call";
+
+    const trade = trades.find(
+      t =>
+        t.Strike_Price === strikeNum &&
+        t.Option_Type &&
+        t.Option_Type.toLowerCase() === optionType.toLowerCase()
+    );
+
+    const side = trade ? trade.Side : "UNKNOWN";
+    const color = side === "BUY" ? "rgb(45, 148, 78)" : side === "SELL" ? "rgb(189, 51, 51)" : "gray";
+
+    return `<span style="color:${color}; font-weight:bold;">${strikeK} ${optionType}</span>`;
+  }
+
+  const strikeParts = strikesRaw.split("_").map(formatStrikeOption);
+  const formattedStrikes = strikeParts.join(" | ");
+
+  const formattedDate = `${rawDate.slice(0, 2)} ${rawDate.slice(2, 5)} ${rawDate.slice(5)}`;
+
+  return [strategyType, formattedStrikes, formattedDate];
 }
 
 export function groupStrategies(trades, allStrategies) {
@@ -274,7 +289,6 @@ export function groupStrategies(trades, allStrategies) {
       if (match) {
         comboGroups.push(match);
         seenComboIds.add(comboId);
-
       }
     }
 
@@ -291,7 +305,6 @@ export function groupStrategies(trades, allStrategies) {
         if (match) {
           comboGroups.push(match);
           seenComboIds.add(id);
-
         }
       }
     }
@@ -355,7 +368,5 @@ export function groupStrategies(trades, allStrategies) {
     blockTradeGroups: sortGroupsByEntryValue(dedupBlockTradeGroups),
   };
 
-
-
-  return result;
+return result;
 }

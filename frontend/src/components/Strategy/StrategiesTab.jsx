@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { filterStrategies } from "./Strategy/utils/strategiesUtils";
-import StrategyOverview from "./Strategy/StrategyOverview";
+import { filterStrategies } from "./utils/strategiesUtils";
+import StrategyOverview from "./StrategyOverview";
 
 const SUBTABS = [
   { id: "strategyOverview", label: "Overview" }
@@ -9,7 +9,7 @@ const SUBTABS = [
 export default function StrategiesTab({ data, filters, onSegmentSelect }) {
   const [activeSubtab, setActiveSubtab] = useState("strategyOverview");
   const [selectedSegment, setSelectedSegment] = useState(null);
-
+  
   const strategies = useMemo(() => {
     return filterStrategies(data, filters);
   }, [data, filters]);
