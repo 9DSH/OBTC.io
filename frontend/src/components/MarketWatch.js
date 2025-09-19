@@ -1,4 +1,3 @@
-// MarketWatch.js
 import React, { useState, useEffect } from 'react';
 import FilterBar, { DEFAULT_FILTERS } from './FilterBar';
 import { formatStrikeLabel } from "./utils/chartHelpers";
@@ -29,21 +28,56 @@ export default function MarketWatch({
   const [contextId, setContextId] = useState(null);
   const [contextId_RightSide, setContextId_RightSide] = useState(null);
 
+  // ✅ Fallback states for trades and chains
+  const [finalTrades, setFinalTrades] = useState(trades || []);
+  const [finalChains, setFinalChains] = useState(chains || []);
+
+  // Load backups if API data is empty
+  useEffect(() => {
+    async function loadBackup() {
+      try {
+        if ((!trades || trades.length === 0) && finalTrades.length === 0) {
+          const resp = await fetch('/trades_backup.json');
+          if (resp.ok) {
+            const data = await resp.json();
+            setFinalTrades(data);
+            console.warn("⚠️ Using backup trades from public folder.");
+          }
+        } else {
+          setFinalTrades(trades);
+        }
+
+        if ((!chains || chains.length === 0) && finalChains.length === 0) {
+          const resp = await fetch('/chains_backup.json');
+          if (resp.ok) {
+            const data = await resp.json();
+            setFinalChains(data);
+            console.warn("⚠️ Using backup chains from public folder.");
+          }
+        } else {
+          setFinalChains(chains);
+        }
+      } catch (err) {
+        console.error("Error loading backup data:", err);
+      }
+    }
+
+    loadBackup();
+  }, [trades, chains]);
+
   // Apply BlockTrade filter to trades
   const filteredTrades = filters.BlockTrade
-    ? trades.filter(trade => {
+    ? finalTrades.filter(trade => {
         const isBlockTrade = trade.BlockTrade_IDs && String(trade.BlockTrade_IDs).trim() !== '-';
-
         return isBlockTrade;
       })
-    : trades;
+    : finalTrades;
 
-  // Prepare multi-select options based on filtered data
+  // Prepare multi-select options
   const strikePrices = Array.from(new Set(filteredTrades.map(t => t.Strike_Price))).sort((a, b) => a - b);
   const expirationDates = Array.from(new Set(filteredTrades.map(t => t.Expiration_Date || t.Expiration)))
     .sort((a, b) => new Date(a) - new Date(b));
 
-  // Calculate max size and entry value from the trades data
   const maxEntryValue = filteredTrades.length > 0
     ? Math.max(...filteredTrades.map(t => parseFloat(t.Entry_Value)).filter(v => !isNaN(v)))
     : DEFAULT_FILTERS.Entry_Value[1];
@@ -53,32 +87,7 @@ export default function MarketWatch({
 
   const tabNames = ['Insights', 'Strategies', 'Data Table'];
 
-  useEffect(() => {
-    console.log("MarketWatch: State updated - activeTab:", activeTab,
-      "selectedSegment:", selectedSegment,
-      "contextId:", contextId,
-      "selectedSegment_RightSide:", selectedSegment_RightSide,
-      "contextId_RightSide:", contextId_RightSide);
-  }, [activeTab, selectedSegment, contextId, selectedSegment_RightSide, contextId_RightSide]);
-
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        width: '100vw',
-        fontSize: "28px",
-        fontFamily: "'Roboto', sans-serif"
-      }}>
-        <p>Loading...</p>
-      </div>
-    );
-  }
-
   function handleSimulate(segmentData) {
-    console.log("MarketWatch: received simulate data:", segmentData);
     if (onSimulate) {
       onSimulate(segmentData);
     }
@@ -116,7 +125,7 @@ export default function MarketWatch({
         return (
           <InsightsTab
             data={filteredTrades}
-            chains={chains}
+            chains={finalChains}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
           />
@@ -142,17 +151,15 @@ export default function MarketWatch({
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        width: '100%',
-        alignItems: 'center',
-        minHeight: '100vh',
-        padding: '20px 0',
-        overflowX: 'hidden',
-      }}
-    >
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      width: '100%',
+      alignItems: 'center',
+      minHeight: '100vh',
+      padding: '20px 0',
+      overflowX: 'hidden',
+    }}>
       <div style={{
         position: 'absolute',
         left: 10,

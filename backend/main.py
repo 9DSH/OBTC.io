@@ -12,6 +12,7 @@ from db import init_db
 from main_data_stream import main as data_stream_main
 from Technical_Analysis import TechnicalAnalysis
 from fetch_btc_price import get_btcusd_price
+from backup_generator import generate_backups
 
 
 fetch_data = Fetching_data()
@@ -48,6 +49,8 @@ def startup_event():
     global data_stream_thread
 
     init_db()
+    # Build backups for frontend
+    generate_backups()
 
     if data_stream_thread is None or not data_stream_thread.is_alive():
         data_stream_thread = threading.Thread(target=start_data_fetch_loop, daemon=True)
