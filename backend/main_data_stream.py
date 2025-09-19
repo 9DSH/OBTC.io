@@ -7,8 +7,8 @@ from db import init_db
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def option_chains_loop(client, interval_seconds=200):
-    """Fetch option chains periodically."""
+async def option_chains_loop(client, interval_seconds=300):
+    """Fetch option chains periodically.every 5 minutes."""
     while True:
         try:
             logger.info("Fetching option chains...")
@@ -19,8 +19,8 @@ async def option_chains_loop(client, interval_seconds=200):
         await asyncio.sleep(interval_seconds)
 
 
-async def public_trades_loop(client, interval_seconds=300):
-    """Fetch public trades periodically every 5 minutes."""
+async def public_trades_loop(client, interval_seconds=600):
+    """Fetch public trades periodically every 10 minutes."""
     while True:
         try:
             logger.info("Fetching public trades...")
