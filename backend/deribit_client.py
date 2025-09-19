@@ -196,7 +196,7 @@ class DeribitClient:
             logger.info(f"Processing {len(instruments)} instruments for trades.")
 
             end = datetime.utcnow()
-            start = end - timedelta(hours=24)
+            start = end - timedelta(hours=1)
             start_ts = int(start.timestamp() * 1000)
             end_ts = int(end.timestamp() * 1000)
             chunk_size = 10

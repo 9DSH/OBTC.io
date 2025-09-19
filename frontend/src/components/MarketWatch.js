@@ -20,7 +20,6 @@ export default function MarketWatch({
   priceLoading,
   onSimulate
 }) {
-
   const [activeTab, setActiveTab] = useState('Insights');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [selectedSegment, setSelectedSegment] = useState(null);
@@ -28,50 +27,15 @@ export default function MarketWatch({
   const [contextId, setContextId] = useState(null);
   const [contextId_RightSide, setContextId_RightSide] = useState(null);
 
-  // ✅ Fallback states for trades and chains
-  const [finalTrades, setFinalTrades] = useState(trades || []);
-  const [finalChains, setFinalChains] = useState(chains || []);
 
-  // Load backups if API data is empty
-  useEffect(() => {
-    async function loadBackup() {
-      try {
-        if ((!trades || trades.length === 0) && finalTrades.length === 0) {
-          const resp = await fetch('/trades_backup.json');
-          if (resp.ok) {
-            const data = await resp.json();
-            setFinalTrades(data);
-            console.warn("⚠️ Using backup trades from public folder.");
-          }
-        } else {
-          setFinalTrades(trades);
-        }
-
-        if ((!chains || chains.length === 0) && finalChains.length === 0) {
-          const resp = await fetch('/chains_backup.json');
-          if (resp.ok) {
-            const data = await resp.json();
-            setFinalChains(data);
-            console.warn("⚠️ Using backup chains from public folder.");
-          }
-        } else {
-          setFinalChains(chains);
-        }
-      } catch (err) {
-        console.error("Error loading backup data:", err);
-      }
-    }
-
-    loadBackup();
-  }, [trades, chains]);
-
+  
   // Apply BlockTrade filter to trades
   const filteredTrades = filters.BlockTrade
-    ? finalTrades.filter(trade => {
+    ? trades.filter(trade => {
         const isBlockTrade = trade.BlockTrade_IDs && String(trade.BlockTrade_IDs).trim() !== '-';
         return isBlockTrade;
       })
-    : finalTrades;
+    : trades;
 
   // Prepare multi-select options
   const strikePrices = Array.from(new Set(filteredTrades.map(t => t.Strike_Price))).sort((a, b) => a - b);
@@ -125,7 +89,7 @@ export default function MarketWatch({
         return (
           <InsightsTab
             data={filteredTrades}
-            chains={finalChains}
+            chains={chains}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
           />
@@ -133,7 +97,7 @@ export default function MarketWatch({
       case 'Strategies':
         return (
           <StrategiesTab
-            data={filteredTrades}
+            data={trades}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
           />
@@ -142,7 +106,7 @@ export default function MarketWatch({
       default:
         return (
           <DataTable
-            data={filteredTrades}
+            data={trades}
             filters={filters}
             onSegmentSelect={handleSegmentSelect}
           />
