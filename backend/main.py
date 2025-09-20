@@ -26,11 +26,11 @@ technical_daily = TechnicalAnalysis("BTC-USD", "1d", "technical_analysis_daily.c
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Static path for JSONs
-STATIC_PATH = os.path.join(BASE_DIR, "static")
-os.makedirs(STATIC_PATH, exist_ok=True)
+# Backend JSON folder
+BACKEND_STATIC_PATH = os.path.join(BASE_DIR, "backend-static")
+os.makedirs(BACKEND_STATIC_PATH, exist_ok=True)
 
-# Backup path
+# Backup folder
 BACKUP_PATH = os.path.join(BASE_DIR, "backup")
 os.makedirs(BACKUP_PATH, exist_ok=True)
 
@@ -53,35 +53,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files at /static
-app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
+# Serve backend JSON at /backend-static/
+app.mount("/backend-static", StaticFiles(directory=BACKEND_STATIC_PATH), name="backend-static")
 
 # ------------------- HELPERS -------------------
 
 class EnhancedJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle datetime/date."""
     def default(self, obj):
         if isinstance(obj, (datetime, date)):
             return obj.isoformat()
         return super().default(obj)
 
 def save_json(data, filename):
-    """Save JSON into static folder and keep only the last backup."""
+    """Save JSON and keep only the last backup."""
     try:
-        filepath = os.path.join(STATIC_PATH, filename)
+        filepath = os.path.join(BACKEND_STATIC_PATH, filename)
         backup_file = os.path.join(BACKUP_PATH, filename)
 
-        # keep one backup
+        # Keep only one backup
         if os.path.exists(filepath):
             with open(filepath, "r", encoding="utf-8") as f_old:
                 old_data = f_old.read()
             with open(backup_file, "w", encoding="utf-8") as f_backup:
                 f_backup.write(old_data)
-            logging.info(f"[BACKUP] Updated {backup_file}")
+            logging.info(f"[BACKUP] Updated backup {backup_file}")
 
-        # write new file
+        # Write new file
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, cls=EnhancedJSONEncoder)
         logging.info(f"[EXPORT] Saved {filename}")
+
     except Exception as e:
         logging.error(f"Failed to save {filename}: {e}")
 
@@ -97,7 +99,7 @@ def update_json_files():
 def start_json_loop():
     while True:
         update_json_files()
-        time.sleep(120)  # 4 minutes
+        time.sleep(120)  # every 2 minutes
 
 def start_data_stream_loop():
     loop = asyncio.new_event_loop()

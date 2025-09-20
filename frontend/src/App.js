@@ -16,7 +16,7 @@ export default function App() {
 
   const fetchTrades = async () => {
     try {
-      const resp = await axios.get("/static/public_trades.json");
+      const resp = await axios.get("/backend-static/public_trades.json");
       setTrades(Array.isArray(resp.data) ? resp.data : []);
     } catch (err) {
       console.error("Error fetching trades JSON:", err);
@@ -26,7 +26,7 @@ export default function App() {
 
   const fetchChains = async () => {
     try {
-      const resp = await axios.get("/static/option_chains.json");
+      const resp = await axios.get("/backend-static/option_chains.json");
       setChains(Array.isArray(resp.data) ? resp.data : []);
     } catch (err) {
       console.error("Error fetching chains JSON:", err);
