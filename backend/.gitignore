@@ -1,4 +1,5 @@
-# databases
+/backup
+/static
 deribit_data.db
 technical_analysis_4h.csv
 technical_analysis_daily.csv
