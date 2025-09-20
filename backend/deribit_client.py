@@ -13,6 +13,7 @@ from skopt import BayesSearchCV
 from sklearn.utils import resample
 import pandas as pd
 import re
+from sqlalchemy import or_ , and_
 
 from db import SessionLocal, OptionChain, PublicTrade, SystemState
 from config import DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET, MAX_CONCURRENT_REQUESTS
@@ -106,7 +107,7 @@ class DeribitClient:
         if not instruments:
             return
 
-        chunk_size = 5  # smaller chunk to reduce CPU/RAM spikes
+        chunk_size = 2  # smaller chunk to reduce CPU/RAM spikes
         sleep_between_chunks = 3  # throttle between chunks
 
         for i in range(0, len(instruments), chunk_size):
@@ -205,7 +206,7 @@ class DeribitClient:
             start_ts = int(start.timestamp() * 1000)
             end_ts = int(end.timestamp() * 1000)
 
-            chunk_size = 5  # smaller chunk
+            chunk_size = 2  # smaller chunk
             sleep_between_chunks = 3
 
             for i in range(0, len(instruments), chunk_size):
@@ -281,30 +282,56 @@ class DeribitClient:
         except Exception:
             return None, None, None
 
-    def remove_expired_option_chains_from_db(self, session):
-        one_week_ago = datetime.utcnow() - timedelta(days=7)
-        now = datetime.utcnow()
-        
-        meta = session.query(SystemState).filter_by(key="last_option_chain_cleanup").first()
-        already_cleaned = (meta and meta.value_date and meta.value_date.date() == datetime.utcnow().date()) if meta else False
 
-        if not already_cleaned:
-            # Combine the two conditions in a single filter
-            num_deleted = session.query(OptionChain).filter(
-                or_(
-                    OptionChain.Timestamp < one_week_ago,
-                    OptionChain.expiration_date < now
+
+    def remove_expired_option_chains_from_db(self, session, force: bool = False):
+        try:
+            now = datetime.utcnow()
+            cleanup_time = time(8, 0)
+            today = now.date()
+            this_cycle = today if now.hour >= cleanup_time.hour else today - timedelta(days=1)
+
+            meta = session.query(SystemState).filter_by(key="last_option_chain_cleanup").first()
+            already_cleaned = (meta.value_date == this_cycle) if meta else False
+
+
+            if not already_cleaned and (now >= datetime.combine(this_cycle, cleanup_time) or force):
+                cutoff_timestamp = now - timedelta(days=3)  # Remove chains older than 3 days
+                cutoff_datetime = datetime.combine(this_cycle, cleanup_time)  # Expired chains threshold
+
+                # Delete chains that are either older than 3 days OR have expired
+                num_deleted = session.query(OptionChain).filter(
+                    or_(
+                        OptionChain.Timestamp < cutoff_timestamp,
+                        and_(
+                            OptionChain.Expiration_Date <= today,
+                            now >= cutoff_datetime
+                        )
+                    )
+                ).delete(synchronize_session=False)
+
+                logger.info(
+                    f"Removed {num_deleted} expired option chains "
+                    f"(cutoff_timestamp={cutoff_timestamp}, cutoff_datetime={cutoff_datetime})"
                 )
-            ).delete(synchronize_session=False)
 
-            logger.info(f"Removed {num_deleted} expired or old option chains.")
-            
-            if meta:
-                meta.value_date = datetime.utcnow()
+                # Update or create meta
+                if meta:
+                    meta.value_date = this_cycle
+                else:
+                    session.add(SystemState(key="last_option_chain_cleanup", value_date=this_cycle))
+
+                session.commit()
             else:
-                session.add(SystemState(key="last_option_chain_cleanup", value_date=datetime.utcnow()))
-            
-            session.commit()
+                logger.info("Skipping cleanup because it already ran this cycle.")
+
+        except Exception as exc:
+            logger.exception("Unexpected error in remove_expired_option_chains_from_db: %s", exc)
+            try:
+                session.rollback()
+            except Exception:
+                logger.exception("Rollback failed")
+
 
     def remove_expired_trades_from_db(self, session):
         now = datetime.utcnow()
