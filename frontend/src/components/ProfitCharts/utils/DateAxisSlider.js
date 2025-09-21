@@ -4,8 +4,10 @@ const DateAxisSlider = ({ dates, days, selectedDay, onChange }) => {
   const [position, setPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false); // NEW
   const trackRef = useRef(null);
   const lastSelectedDayRef = useRef(null);
+  const playIntervalRef = useRef(null); // NEW
 
   const debounce = (func, wait) => {
     let timeout;
@@ -48,6 +50,30 @@ const DateAxisSlider = ({ dates, days, selectedDay, onChange }) => {
 
   const debouncedUpdatePosition = useCallback(debounce(updatePosition, 50), [updatePosition]);
 
+  // --- PLAY/PAUSE LOGIC ---
+  useEffect(() => {
+    if (isPlaying) {
+      const total = days.length - 1;
+      let currentIndex = days.indexOf(selectedDay);
+
+      playIntervalRef.current = setInterval(() => {
+        currentIndex++;
+        if (currentIndex > total) {
+          clearInterval(playIntervalRef.current);
+          setIsPlaying(false); // stop at expiration
+          return;
+        }
+        onChange(days[currentIndex]);
+      }, 100); // 1 second per step, adjust speed as needed
+    } else {
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+      }
+    }
+    return () => clearInterval(playIntervalRef.current);
+  }, [isPlaying, days, selectedDay, onChange]);
+
+  // Drag & touch handlers remain unchanged
   const handleMouseDown = (e) => {
     setIsDragging(true);
     e.preventDefault();
@@ -129,12 +155,8 @@ const DateAxisSlider = ({ dates, days, selectedDay, onChange }) => {
 
   const labelIndices = [];
   if (days.length <= 8) {
-    // Show all labels for 8 days or less
-    for (let i = 0; i < days.length; i++) {
-      labelIndices.push(i);
-    }
+    for (let i = 0; i < days.length; i++) labelIndices.push(i);
   } else {
-    // Use the existing logic for more than 8 days
     if (days.length > 0) labelIndices.push(0);
     if (days.length > 1) labelIndices.push(days.length - 1);
     const segment = days.length - 1;
@@ -147,152 +169,173 @@ const DateAxisSlider = ({ dates, days, selectedDay, onChange }) => {
   const selectedDateLabel = currentTickIndex === total ? "Expiration" : dates[currentTickIndex];
 
   return (
-    // New outer container with horizontal padding
-    <div style={{ width: "100%", padding: "0 clamp(20px, 2vw,40px)", boxSizing: "border-box" }}>
+    <div style={{ width: "100%", 
+         paddingRight: " clamp(20px, 2vw,40px)", 
+          boxSizing: "border-box" }}>
       <div
         style={{
           width: "100%",
           display: "flex",
-          flexDirection: "column",
+          flexDirection: "row", // row to place button left of slider
           alignItems: "center",
           position: "relative",
+          gap: "10px"
         }}
       >
-
-        {/* Hover Label */}
-        {hoveredIndex !== null && (
-          <div
-            style={{
-              position: "absolute",
-              top: "-25px",
-              left: `${(hoveredIndex / total) * 100}%`,
-              transform:
-                hoveredIndex === 0
-                  ? "translateX(0)"
-                  : hoveredIndex === total
-                  ? "translateX(-100%)"
-                  : "translateX(-50%)",
-              whiteSpace: "nowrap",
-              fontSize: "clamp(9px, 1vw, 12px)",
-              fontWeight: 600,
-              color: "#777",
-              zIndex: 20,
-            }}
-          >
-            {hoveredIndex === 0 ? "Today" : hoveredIndex === total ? "Exp" : dates[hoveredIndex]}
-          </div>
-        )}
-
-        {/* Main Slider Track */}
-        <div
-          ref={trackRef}
+        {/* Play / Pause Button */}
+        <button
+          onClick={() => setIsPlaying(!isPlaying)}
           style={{
-            width: "100%",
-            height: "4px",
-            backgroundColor: "#444",
-            borderRadius: "3px",
-            position: "relative",
+            background: "none",
+            border: "1px solid #666",
+            borderRadius: "50%",
+            width: "30px",
+            height: "30px",
             cursor: "pointer",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+            color: "#666",
+            fontSize: "14px"
           }}
-          onClick={handleTrackClick}
-          onTouchStart={handleTrackTouch}
         >
-          {/* Progress Bar */}
+          {isPlaying ? "❚❚" : "▶"}
+        </button>
+
+        {/* Slider Container */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
+          {/* Hover Label */}
+          {hoveredIndex !== null && (
+            <div
+              style={{
+                position: "absolute",
+                top: "-25px",
+                left: `${(hoveredIndex / total) * 100}%`,
+                transform:
+                  hoveredIndex === 0
+                    ? "translateX(0)"
+                    : hoveredIndex === total
+                    ? "translateX(-100%)"
+                    : "translateX(-50%)",
+                whiteSpace: "nowrap",
+                fontSize: "clamp(9px, 1vw, 12px)",
+                fontWeight: 600,
+                color: "#777",
+                zIndex: 20,
+              }}
+            >
+              {hoveredIndex === 0 ? "Today" : hoveredIndex === total ? "Exp" : dates[hoveredIndex]}
+            </div>
+          )}
+
+          {/* Existing Slider Track... */}
           <div
+            ref={trackRef}
             style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              height: "100%",
-              width: `${Math.min(position, 100)}%`,
-              backgroundColor: "var(--color-primary)",
-              borderRadius: "3px 0 0 3px",
-              transition: isDragging ? "none" : "width 0.1s ease-in-out",
+              width: "100%",
+              height: "4px",
+              backgroundColor: "#444",
+              borderRadius: "3px",
+              position: "relative",
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
             }}
-          />
+            onClick={handleTrackClick}
+            onTouchStart={handleTrackTouch}
+          >
+            {/* Progress Bar */}
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                height: "100%",
+                width: `${Math.min(position, 100)}%`,
+                backgroundColor: "var(--color-primary)",
+                borderRadius: "3px 0 0 3px",
+                transition: isDragging ? "none" : "width 0.1s ease-in-out",
+              }}
+            />
 
-          {/* Slider Thumb */}
-          <div
-            style={{
-              position: "absolute",
-              width: "clamp(8px, 1vh,10px)",
-              height:"clamp(8px, 1vh,10px)",
-              backgroundColor: "#1E40AF",
-              borderRadius: "50%",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.2), 0 0 0 2px #FFFFFF",
-              cursor: "grab",
-              top: "50%",
-              left: `${Math.min(position, 100)}%`,
-              transform: "translate(-50%, -50%)",
-              transition: isDragging ? "none" : "left 0.1s ease-in-out, background-color 0.2s",
-              zIndex: 10,
-            }}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
-          />
+            {/* Slider Thumb */}
+            <div
+              style={{
+                position: "absolute",
+                width: "clamp(8px, 1vh,10px)",
+                height:"clamp(8px, 1vh,10px)",
+                backgroundColor: "#1E40AF",
+                borderRadius: "50%",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.2), 0 0 0 2px #FFFFFF",
+                cursor: "grab",
+                top: "50%",
+                left: `${Math.min(position, 100)}%`,
+                transform: "translate(-50%, -50%)",
+                transition: isDragging ? "none" : "left 0.1s ease-in-out, background-color 0.2s",
+                zIndex: 10,
+              }}
+              onMouseDown={handleMouseDown}
+              onTouchStart={handleTouchStart}
+            />
 
-          {/* Ticks and Labels */}
-          <div style={{ position: "relative", width: "100%", height: "30px" }}>
-            {days.map((day, index) => {
-              const tickPosition = (index / total) * 100;
-              const isLabelVisible = labelIndices.includes(index);
-              const isFirst = index === 0;
-              const isLast = index === total;
+            {/* Ticks & Labels */}
+            <div style={{ position: "relative", width: "100%", height: "30px" }}>
+              {days.map((day, index) => {
+                const tickPosition = (index / total) * 100;
+                const isLabelVisible = labelIndices.includes(index);
+                const isFirst = index === 0;
+                const isLast = index === total;
 
-              let labelTransform = "translateX(-50%)";
-              if (isFirst) labelTransform = "translateX(0)";
-              else if (isLast) labelTransform = "translateX(-100%)";
+                let labelTransform = "translateX(-50%)";
+                if (isFirst) labelTransform = "translateX(0)";
+                else if (isLast) labelTransform = "translateX(-100%)";
 
-              return (
-                <div
-                  key={index}
-                  style={{
-                    position: "absolute",
-                    left: `${tickPosition}%`,
-                    transform: "translateX(-50%)",
-                    textAlign: "center",
-                    width: "1px",
-                    padding: "0 2px",
-                  }}
-                  onMouseEnter={() => handleTickHover(index)}
-                  onMouseLeave={handleTickLeave}
-                  onClick={() => {
-                    const perc = (index / total) * 100;
-                    setPosition(perc);
-                    onChange(day);
-                  }}
-                >
+                return (
                   <div
+                    key={index}
                     style={{
                       position: "absolute",
-                      width: "clamp(7px, 0.9vw,9px)",
-                      height: "clamp(7px, 0.9vw,9px)",
-                      borderRadius: "50%",
-                      backgroundColor: "#444",
-                      top: "-2px",
+                      left: `${tickPosition}%`,
+                      transform: "translateX(-50%)",
+                      textAlign: "center",
+                      width: "1px",
+                      padding: "0 2px",
                     }}
-                  />
-                  {isLabelVisible && (
-                    <span
+                    onMouseEnter={() => handleTickHover(index)}
+                    onMouseLeave={handleTickLeave}
+                    onClick={() => {
+                      const perc = (index / total) * 100;
+                      setPosition(perc);
+                      onChange(day);
+                    }}
+                  >
+                    <div
                       style={{
-                        fontSize: "clamp(8px, 1vw, 10px)",
-                        color: "#6B7280",
-                        fontWeight: 400,
-                        whiteSpace: "nowrap",
-                        display: "block",
-                        marginTop: "20px",
-                        opacity: 1,
-                        transition: "opacity 0.2s ease-in-out",
-                        transform: labelTransform,
+                        position: "absolute",
+                        width: "clamp(7px, 0.9vw,9px)",
+                        height: "clamp(7px, 0.9vw,9px)",
+                        borderRadius: "50%",
+                        backgroundColor: "#444",
+                        top: "-2px",
                       }}
-                    >
-                      {isLast ? "Exp" : index === 0 ? "Today" : dates[index]}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                    />
+                    {isLabelVisible && (
+                      <span
+                        style={{
+                          fontSize: "clamp(8px, 1vw, 10px)",
+                          color: "#6B7280",
+                          fontWeight: 400,
+                          whiteSpace: "nowrap",
+                          display: "block",
+                          marginTop: "20px",
+                          opacity: 1,
+                          transition: "opacity 0.2s ease-in-out",
+                          transform: labelTransform,
+                        }}
+                      >
+                        {isLast ? "Exp" : index === 0 ? "Today" : dates[index]}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

@@ -13,7 +13,7 @@ from skopt import BayesSearchCV
 from sklearn.utils import resample
 import pandas as pd
 import re
-from sqlalchemy import or_ , and_
+from sqlalchemy import or_ , and_, func
 
 from db import SessionLocal, OptionChain, PublicTrade, SystemState
 from config import DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET, MAX_CONCURRENT_REQUESTS
@@ -120,7 +120,7 @@ class DeribitClient:
                 session = SessionLocal()
                 count = 0
                 try:
-                    self.remove_expired_option_chains_from_db(session)
+                    self.remove_expired_option_chains_from_db(session, force = True)
                     for inst, ob in zip(chunk_data, order_books):
                         if not ob:
                             continue
@@ -284,38 +284,47 @@ class DeribitClient:
 
 
 
+
+
     def remove_expired_option_chains_from_db(self, session, force: bool = False):
         try:
             now = datetime.utcnow()
-            cleanup_time = time(8, 0)
             today = now.date()
-            this_cycle = today if now.hour >= cleanup_time.hour else today - timedelta(days=1)
+            cleanup_time = time(8, 0)
+            this_cycle = today if now.hour >= cleanup_time.hour else today - timedelta(days=7)
 
             meta = session.query(SystemState).filter_by(key="last_option_chain_cleanup").first()
             already_cleaned = (meta.value_date == this_cycle) if meta else False
 
+            if not already_cleaned or force:
+                logger.info("Running option chain cleanup...")
 
-            if not already_cleaned and (now >= datetime.combine(this_cycle, cleanup_time) or force):
-                cutoff_timestamp = now - timedelta(days=3)  # Remove chains older than 3 days
-                cutoff_datetime = datetime.combine(this_cycle, cleanup_time)  # Expired chains threshold
-
-                # Delete chains that are either older than 3 days OR have expired
-                num_deleted = session.query(OptionChain).filter(
-                    or_(
-                        OptionChain.Timestamp < cutoff_timestamp,
-                        and_(
-                            OptionChain.Expiration_Date <= today,
-                            now >= cutoff_datetime
-                        )
+                # Group by instrument + date, keep only MIN and MAX Timestamp, delete the rest
+                subq = (
+                    session.query(
+                        OptionChain.Instrument,
+                        func.date(OptionChain.Timestamp).label("chain_date"),
+                        func.min(OptionChain.Timestamp).label("min_ts"),
+                        func.max(OptionChain.Timestamp).label("max_ts"),
                     )
-                ).delete(synchronize_session=False)
-
-                logger.info(
-                    f"Removed {num_deleted} expired option chains "
-                    f"(cutoff_timestamp={cutoff_timestamp}, cutoff_datetime={cutoff_datetime})"
+                    .group_by(OptionChain.Instrument, func.date(OptionChain.Timestamp))
+                    .subquery()
                 )
 
-                # Update or create meta
+                # Delete everything that is not min_ts or max_ts for each instrument/day
+                num_deleted = (
+                    session.query(OptionChain)
+                    .filter(
+                        ~OptionChain.Timestamp.in_(
+                            session.query(subq.c.min_ts).union(session.query(subq.c.max_ts))
+                        )
+                    )
+                    .delete(synchronize_session=False)
+                )
+
+                logger.info(f"Removed {num_deleted} old option chain rows (kept only 2 per instrument/day).")
+
+                # Update or create cleanup meta state
                 if meta:
                     meta.value_date = this_cycle
                 else:
@@ -331,6 +340,7 @@ class DeribitClient:
                 session.rollback()
             except Exception:
                 logger.exception("Rollback failed")
+
 
 
     def remove_expired_trades_from_db(self, session):

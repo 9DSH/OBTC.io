@@ -11,7 +11,6 @@ export function formatNumberKM(value) {
 }
 
 export function filterStrategies(trades, filters = {}) {
-
   if (!trades || trades.length === 0) {
     return [];
   }
@@ -25,11 +24,19 @@ export function filterStrategies(trades, filters = {}) {
     let groupKey;
 
     if (filters.BlockTrade) {
-      // For block trades, prioritize BlockTrade_IDs, fallback to custom for single trades
+      // Only keep strategies that have valid block trade IDs
       if (trade.BlockTrade_IDs && String(trade.BlockTrade_IDs) !== "null" && String(trade.BlockTrade_IDs).trim() !== "-") {
-        groupKey = `block:${trade.BlockTrade_IDs}`;
+        // Use the same grouping rules as before, but enforce BlockTrade_IDs
+        if (trade.ComboTrade_IDs && trade.ComboTrade_IDs !== "null") {
+          groupKey = `combo:${trade.ComboTrade_IDs}:block:${trade.BlockTrade_IDs}`;
+        } else if (trade.Combo_ID && trade.Combo_ID !== "null") {
+          groupKey = `combo_id:${trade.Combo_ID}:block:${trade.BlockTrade_IDs}`;
+        } else {
+          groupKey = `block:${trade.BlockTrade_IDs}`;
+        }
       } else {
-        groupKey = `custom:${trade.Trade_ID || trade.id || `trade_${i}`}`;
+        skippedTrades++;
+        continue; // skip trades without valid BlockTrade_IDs
       }
     } else {
       // Original grouping logic for non-block trades
@@ -56,7 +63,7 @@ export function filterStrategies(trades, filters = {}) {
     strategyGroups[groupKey].push(trade);
   }
 
-
+  // Apply filters (other than BlockTrade)
   const filteredGroups = Object.values(strategyGroups).filter(group => {
     const groupMatch = group.some(trade => {
       return Object.entries(filters).every(([key, value]) => {
@@ -65,11 +72,9 @@ export function filterStrategies(trades, filters = {}) {
         let result = true;
 
         switch (key) {
-          case "Expiration_Date": {
+          case "Expiration_Date":
             result = String(trade.Expiration_Date) === String(value);
             break;
-          }
-
           case "Strike_Price": {
             const strike = Number(trade.Strike_Price);
             result = Array.isArray(value)
@@ -77,7 +82,6 @@ export function filterStrategies(trades, filters = {}) {
               : strike === Number(value);
             break;
           }
-
           case "Entry_Value": {
             const val = Number(trade.Entry_Value);
             if (Array.isArray(value)) {
@@ -88,7 +92,6 @@ export function filterStrategies(trades, filters = {}) {
             }
             break;
           }
-
           case "Size": {
             const sizeVal = Number(trade.Size);
             if (Array.isArray(value)) {
@@ -99,7 +102,6 @@ export function filterStrategies(trades, filters = {}) {
             }
             break;
           }
-
           case "Entry_Date": {
             const tradeDate = trade.Entry_Date ? new Date(trade.Entry_Date) : null;
             const start = value.start ? new Date(value.start) : null;
@@ -110,26 +112,20 @@ export function filterStrategies(trades, filters = {}) {
               (!end || tradeDate <= end);
             break;
           }
-
-          case "Side": {
+          case "Side":
             result = Array.isArray(value)
               ? value.includes(trade.Side)
               : String(trade.Side) === String(value);
             break;
-          }
-
-          case "Option_Type": {
+          case "Option_Type":
             result = Array.isArray(value)
               ? value.includes(trade.Option_Type)
               : String(trade.Option_Type) === String(value);
             break;
-          }
-
-          default: {
+          default:
             result = Array.isArray(value)
               ? value.includes(trade[key])
               : String(trade[key]) === String(value);
-          }
         }
 
         return result;
@@ -139,14 +135,11 @@ export function filterStrategies(trades, filters = {}) {
     return groupMatch;
   });
 
-
-  // Return groups based on BlockTrade filter
-  const finalGroups = filters.BlockTrade
-    ? filteredGroups // Include single-trade groups for block trades
-    : filteredGroups.filter(group => group.length > 1); // Only multi-trade groups for default
-
-  return finalGroups;
+  return filteredGroups;
 }
+
+
+
 
 export function formatStrategyDisplay(rawName, trades = []) {
 

@@ -218,8 +218,8 @@ const HeatmapChart = ({
         xAxisFormat === "k" ? (xLabels[col] / 1000).toFixed(2) + "k" : xLabels[col];
       const profitFormatted = formatNumberKM(data[row][col]);
       setTooltip({
-        x: 15,
-        y: 15,
+        x: 100,
+        y: -3,
         strike: strikeFormatted,
         profit: profitFormatted,
       });

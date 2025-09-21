@@ -66,10 +66,11 @@ class EnhancedJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 def save_json(data, filename):
-    """Save JSON and keep only the last backup."""
+    """Save JSON atomically and keep only the last backup."""
     try:
         filepath = os.path.join(BACKEND_STATIC_PATH, filename)
         backup_file = os.path.join(BACKUP_PATH, filename)
+        tmp_file = filepath + ".tmp"
 
         # Keep only one backup
         if os.path.exists(filepath):
@@ -79,13 +80,17 @@ def save_json(data, filename):
                 f_backup.write(old_data)
             logging.info(f"[BACKUP] Updated backup {backup_file}")
 
-        # Write new file
-        with open(filepath, "w", encoding="utf-8") as f:
+        # Write to temporary file first
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, cls=EnhancedJSONEncoder)
+
+        # Atomically replace the old file
+        os.replace(tmp_file, filepath)
         logging.info(f"[EXPORT] Saved {filename}")
 
     except Exception as e:
         logging.error(f"Failed to save {filename}: {e}")
+
 
 def update_json_files():
     try:

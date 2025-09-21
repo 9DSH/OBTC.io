@@ -1,32 +1,25 @@
 export function getHeatColor(value) {
-  // value is between -1 and 1 (normalized)
-  // Positive = green blend, Negative = red blend
-  const intensity = Math.min(Math.abs(value), 1);
+  // Clamp value to [-1, 1]
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+  value = clamp(value, -1, 1);
 
-  // Middle zone color (low magnitude) = yellow
-  const yellow = { r: 255, g: 255, b: 0 };
-  const green = { r: 0, g: 200, b: 0 };
-  const red = { r: 200, g: 0, b: 0 };
-
-  let c1, c2;
-
-  if (value >= 0) {
-    // Positive: yellow → green
-    c1 = yellow;
-    c2 = green;
+  if (value < 0) {
+    // Negative: red → dark red
+    const intensity = Math.abs(value); // 0 → 1
+    const r = 255 - Math.round(155 * intensity); // 255 → 100
+    const g = 0;
+    const b = 0;
+    return `rgb(${r},${g},${b})`;
   } else {
-    // Negative: yellow → red
-    c1 = yellow;
-    c2 = red;
+    // Positive: green → dark green
+    const intensity = value; // 0 → 1
+    const r = 0;
+    const g = 200 + Math.round(55 * intensity); // 200 → 255
+    const b = 0;
+    return `rgb(${r},${g},${b})`;
   }
-
-  // Linear interpolate between yellow and red/green based on intensity
-  const r = Math.round(c1.r + (c2.r - c1.r) * intensity);
-  const g = Math.round(c1.g + (c2.g - c1.g) * intensity);
-  const b = Math.round(c1.b + (c2.b - c1.b) * intensity);
-
-  return `rgb(${r},${g},${b})`;
 }
+
 
 // Helper function to format numbers as k or M without decimals
 export function formatNumberKM(value, isK = false) {
@@ -146,20 +139,45 @@ export function drawAxes(
       ctx.font = "clamp(9px, 0.7vw, 11px)";
       ctx.setLineDash([5,5]);
 
+      // Collect positions + labels
+      let labelData = [];
       breakevens.forEach(strike => {
         if (strike >= xMin && strike <= xMax) {
           const xPos = margin.left + ((strike - xMin) / (xMax - xMin)) * (w - margin.left - margin.right);
-          ctx.beginPath();
-          ctx.moveTo(xPos, h - margin.bottom);
-          ctx.lineTo(xPos, margin.top - 30);
-          ctx.stroke();
-
-          ctx.save();
-          ctx.translate(xPos - 5, margin.top - 20);
-          ctx.textAlign = "center";
-          ctx.fillText(xAxisFormat==="k" ? `${(strike/1000).toFixed(1)}k` : strike.toFixed(2), 0, 0);
-          ctx.restore();
+          const label = xAxisFormat==="k" ? `${(strike/1000).toFixed(1)}k` : strike.toFixed(2);
+          labelData.push({ strike, xPos, label });
         }
+      });
+
+      // Sort left to right
+      labelData.sort((a,b) => a.xPos - b.xPos);
+
+      // Adjust Y positions to avoid overlap
+      let placedLabels = [];
+      const minSpacing = 10; // px vertical spacing
+      labelData.forEach(ld => {
+        let yPos = margin.top - 15;
+        // Push down if overlapping with previous labels
+        for (let prev of placedLabels) {
+          if (Math.abs(ld.xPos - prev.xPos) < 30 && Math.abs(yPos - prev.yPos) < minSpacing) {
+            yPos = prev.yPos + minSpacing;
+          }
+        }
+        placedLabels.push({ ...ld, yPos });
+      });
+
+      // Draw lines + adjusted labels
+      placedLabels.forEach(ld => {
+        ctx.beginPath();
+        ctx.moveTo(ld.xPos, h - margin.bottom);
+        ctx.lineTo(ld.xPos, margin.top - 20);
+        ctx.stroke();
+
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.translate(ld.xPos, ld.yPos);
+        ctx.fillText(ld.label, 0, 0);
+        ctx.restore();
       });
 
       ctx.restore();
