@@ -83,17 +83,21 @@ export default function App({ goToLanding }) {
   // 🔹 Block mobile access completely
   if (isMobile) {
     return (
-      <div style={{ 
-        display: "flex", 
-        height: "100vh", 
-        alignItems: "center", 
-        justifyContent: "center", 
-        textAlign: "center", 
-        fontSize: "1.2rem", 
-        padding: "20px" 
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        fontSize: "1.2rem",
+        padding: "20px",
+        backgroundColor: "#1b1b1b", // optional: dark background for better contrast
+        color: "#f0f0f0", // optional: light text
+        gap: "12px", // spacing between rows
       }}>
-        Mobile access is disabled. <br />
-        Please use a <b>desktop browser</b> to open <b>OptionBTC</b>.
+        <div>Mobile access is disabled.</div>
+        <div>Please use a <b>desktop browser</b> to open <b>OptionBTC</b>.</div>
       </div>
     );
   }
