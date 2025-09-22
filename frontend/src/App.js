@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import MarketWatch from "./components/MarketWatch";
 import TradeDashboard from "./components/TradeDashboard";
 import MainMenu from "./components/MainMenu";
 import "./darkTheme.css";
 
-export default function App() {
+export default function App({ goToLanding }) {
   const [trades, setTrades] = useState([]);
   const [chains, setChains] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [btcprice, setBtcPrice] = useState(null);
   const [simulateData, setSimulateData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const navigate = useNavigate(); // hook to navigate programmatically
 
   const fetchTrades = async () => {
     try {
@@ -77,46 +80,67 @@ export default function App() {
     };
   }, []);
 
-  return (
-    <BrowserRouter>
-      <div className="fill" style={{ padding: "20px", display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", position: "relative" }}>
-        <MainMenu loading={loading} />
-        {!loading && (
-          <Routes>
-            <Route
-              path="/market-watch"
-              element={
-                <MarketWatch
-                  trades={trades}
-                  chains={chains}
-                  loading={loading}
-                  analytics={analytics}
-                  analyticsLoading={false}
-                  btcprice={btcprice}
-                  priceLoading={false}
-                  onSimulate={setSimulateData}
-                />
-              }
-            />
-            <Route
-              path="/simulation"
-              element={
-                <TradeDashboard
-                  trades={trades}
-                  chains={chains}
-                  loading={loading}
-                  analytics={analytics}
-                  analyticsLoading={false}
-                  btcprice={btcprice}
-                  priceLoading={false}
-                  simulateData={simulateData}
-                />
-              }
-            />
-            <Route path="*" element={<Navigate to="/market-watch" replace />} />
-          </Routes>
-        )}
+  // 🔹 Block mobile access completely
+  if (isMobile) {
+    return (
+      <div style={{ 
+        display: "flex", 
+        height: "100vh", 
+        alignItems: "center", 
+        justifyContent: "center", 
+        textAlign: "center", 
+        fontSize: "1.2rem", 
+        padding: "20px" 
+      }}>
+        Mobile access is disabled. <br />
+        Please use a <b>desktop browser</b> to open <b>OptionBTC</b>.
       </div>
-    </BrowserRouter>
+    );
+  }
+
+  // Use navigate instead of window.history
+  const handleGoToLanding = () => {
+    if (goToLanding) {
+      goToLanding(); // callback to LandingPage
+    } else {
+      navigate("/home"); // fallback navigation
+    }
+  };
+
+  return (
+    <div className="fill" style={{ padding: "20px", display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", position: "relative" }}>
+      <MainMenu loading={loading} goToLanding={handleGoToLanding} />
+      {!loading && (
+        <Routes>
+          <Route
+            path="/market-watch"
+            element={<MarketWatch
+              trades={trades}
+              chains={chains}
+              loading={loading}
+              analytics={analytics}
+              analyticsLoading={false}
+              btcprice={btcprice}
+              priceLoading={false}
+              onSimulate={setSimulateData}
+            />}
+          />
+          <Route
+            path="/simulation"
+            element={<TradeDashboard
+              trades={trades}
+              chains={chains}
+              loading={loading}
+              analytics={analytics}
+              analyticsLoading={false}
+              btcprice={btcprice}
+              priceLoading={false}
+              simulateData={simulateData}
+            />}
+          />
+          <Route path="*" element={<Navigate to="/market-watch" replace />} />
+        </Routes>
+      )}
+    </div>
   );
 }

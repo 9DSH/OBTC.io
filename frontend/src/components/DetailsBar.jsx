@@ -26,6 +26,7 @@ export default function DetailsBar({ activeTab,
     const [followData, setFollowData] = useState(null);
     const [isSimulating, setIsSimulating] = useState(false);
     const [expandedTradeIds, setExpandedTradeIds] = useState(new Set());
+    const [sortMode, setSortMode] = useState("entryValue"); // "entryValue" | "count"
 
     const toggleExpand = () => {
         setIsExpanded(prev => !prev);
@@ -501,7 +502,7 @@ export default function DetailsBar({ activeTab,
     const renderInsightPutCallDist = () => {
         const strike = selectedSegment?.strike || 'N/A';
         const groupedData = selectedSegment?.groupedData || {};
-
+    
         const formatDateLabel = (iso) => {
             const d = new Date(iso);
             const day = String(d.getDate()).padStart(2, '0');
@@ -509,50 +510,59 @@ export default function DetailsBar({ activeTab,
             const year = String(d.getFullYear()).slice(-2);
             return `${day} ${mon} ${year}`;
         };
-
+    
         const getDoughnutChartData = (trades) => {
             const total = trades.length;
             const byExp = trades.reduce((acc, t) => {
                 const label = formatDateLabel(t.Expiration_Date);
-                if (!acc[label]) {
-                    acc[label] = { count: 0, entryValue: 0 };
-                }
+                if (!acc[label]) acc[label] = { count: 0, entryValue: 0 };
                 acc[label].count += 1;
                 acc[label].entryValue += t.Entry_Value || 0;
                 return acc;
             }, {});
-        
-            const entries = Object.entries(byExp).map(([label, obj]) => ({
+    
+            let entries = Object.entries(byExp).map(([label, obj]) => ({
                 label,
                 count: obj.count,
                 entryValue: obj.entryValue,
-                percentage: ((obj.count / total) * 100).toFixed(2),
+                percentage: total > 0 ? ((obj.count / total) * 100).toFixed(2) : 0,
             }));
-        
-            entries.sort((a, b) => b.percentage - a.percentage);
-        
-            const labels = entries.map(({ label }) => label);
-            const values = entries.map(({ percentage }) => percentage);
-            const colors = generateCustomGradientColors('#283254', '#868dba', values);
-        
+    
+            let labels, values, colors;
+    
+            if (sortMode === "entryValue") {
+                // Sort by entryValue
+                entries.sort((a, b) => b.entryValue - a.entryValue);
+                labels = entries.map(e => e.label);
+                values = entries.map(e => e.entryValue);
+                const maxEntry = Math.max(...values, 1);
+                const valuesForColor = values.map(v => (v / maxEntry) * 100);
+                colors = generateCustomGradientColors('#283254', '#868dba', valuesForColor);
+            } else {
+                // Sort by count/distribution
+                entries.sort((a, b) => b.count - a.count);
+                labels = entries.map(e => e.label);
+                values = entries.map(e => e.percentage);
+                colors = generateCustomGradientColors('#283254', '#868dba', values);
+            }
+    
             return {
                 labels,
-                datasets: [
-                    {
-                        label: 'Expiration %',
-                        data: values,
-                        backgroundColor: colors.slice(0, values.length),
-                        borderColor: '#121212',
-                        borderWidth: 1,
-                        extra: entries.map(e => ({
-                            entryValue: e.entryValue,
-                            percentage: e.percentage,
-                        })),
-                    },
-                ],
+                datasets: [{
+                    label: 'Expiration %',
+                    data: values,
+                    backgroundColor: colors.slice(0, values.length),
+                    borderColor: '#121212',
+                    borderWidth: 1,
+                    extra: entries.map(e => ({
+                        entryValue: e.entryValue,
+                        percentage: e.percentage,
+                        count: e.count,
+                    })),
+                }],
             };
         };
-        
+    
         const chartOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -590,24 +600,17 @@ export default function DetailsBar({ activeTab,
                 },
             },
         };
-        
+    
         const renderChart = (label) => {
             const trades = groupedData[label] || [];
             const totalTrades = Object.values(groupedData).reduce((sum, arr) => sum + arr.length, 0);
             const percentage = totalTrades > 0 ? ((trades.length / totalTrades) * 100).toFixed(1) : 0;
-        
+    
             return (
                 <div key={label} style={styles.chartBox}>
-                    <div style={styles.chartTitle}>
-                        {label}
-                    </div>
-                    <div style={{ 
-                        fontSize: 'clamp(8px, 1vw, 10px)', 
-                        fontWeight: 400, 
-                        color: "rgb(154, 154, 154)" 
-                    }}>
-                        {trades.length} Trade{trades.length !== 1 ? 's' : ''} 
-                        {totalTrades > 0 && ` (${percentage}%)`}
+                    <div style={styles.chartTitle}>{label}</div>
+                    <div style={{ fontSize: 'clamp(8px, 1vw, 10px)', fontWeight: 400, color: "rgb(154, 154, 154)" }}>
+                        {trades.length} Trade{trades.length !== 1 ? 's' : ''} {totalTrades > 0 && ` (${percentage}%)`}
                     </div>
                     {trades.length === 0 ? (
                         <div style={styles.emptyBox}>No trades...</div>
@@ -619,32 +622,57 @@ export default function DetailsBar({ activeTab,
                 </div>
             );
         };
-         
+    
         const allTrades = Object.values(groupedData).flat();
         const totalTrades = allTrades.length;
         const totalValue = allTrades.reduce((sum, t) => sum + (t.Entry_Value || 0), 0);
         const totalBlockTrades = filters?.BlockTrade
-        ? totalTrades
-        : allTrades.reduce((sum, t) => {
-            const isBlockTrade = t.BlockTrade_IDs && 
-                                String(t.BlockTrade_IDs) !== "null" && 
-                                String(t.BlockTrade_IDs).trim() !== "-";
-            return sum + (isBlockTrade ? 1 : 0);
-        }, 0);
+            ? totalTrades
+            : allTrades.reduce((sum, t) => {
+                const isBlockTrade = t.BlockTrade_IDs && String(t.BlockTrade_IDs) !== "null" && String(t.BlockTrade_IDs).trim() !== "-";
+                return sum + (isBlockTrade ? 1 : 0);
+            }, 0);
+    
         return (
             <div style={styles.content}>
-               <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px', }}>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Strike Price </div> <span><CustomTooltip content={`Strike Price: ${formatStrikeLabel(strike)}`}> {formatStrikeLabel(strike)} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'}}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Trades </div> <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'}}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Total Values </div> <span><CustomTooltip content={`Total values: ${formatStrikeLabel(totalValue)}`}>  ${formatStrikeLabel(totalValue)} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'}}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> BlockTrades </div> <span><CustomTooltip content={`Number of Block Trades in this strike: ${totalBlockTrades}`}> {totalBlockTrades} </CustomTooltip> </span> </div>
+                {/* 🔹 Info Bar with tooltips */}
+                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <CustomTooltip content={sortMode === "count" ? "Charts are sorted by number of trades" : "Charts are sorted by entry value"}>
+                            <button
+                                onClick={() => setSortMode(sortMode === "entryValue" ? "count" : "entryValue")}
+                                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "6px", border: "1px solid   #41486d", backgroundColor: "#222", color: "#ccc", cursor: "pointer" }}
+                            >
+                                {sortMode === "entryValue" ? "Entry Value" : "Distribution"}
+                            </button>
+                        </CustomTooltip>
+                    </div>
+    
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>Strike Price</div>
+                        <span><CustomTooltip content={`Strike Price: ${formatStrikeLabel(strike)}`}>{formatStrikeLabel(strike)}</CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>Total Trades</div>
+                        <span><CustomTooltip content={`Total Trades: ${totalTrades}`}>{totalTrades}</CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>Total Values</div>
+                        <span><CustomTooltip content={`Total values: ${formatStrikeLabel(totalValue)}`}>${formatStrikeLabel(totalValue)}</CustomTooltip></span>
+                    </div>
+                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>BlockTrades</div>
+                        <span><CustomTooltip content={`Number of Block Trades in this strike: ${totalBlockTrades}`}>{totalBlockTrades}</CustomTooltip></span>
+                    </div>
                 </div>
+    
                 <div style={styles.grid}>
                     {['Buy Call', 'Sell Call', 'Buy Put', 'Sell Put'].map(renderChart)}
                 </div>
             </div>
         );
     };
+    
 
     const renderStrategyOverview = () => {
         const trades = selectedSegment?.trades || [];
@@ -745,60 +773,85 @@ export default function DetailsBar({ activeTab,
     };
 
     const renderInsightTopVolume = () => {
+        
+    
         const trades = selectedSegment?.trades || [];
         const yValue = selectedSegment?.y;
         const isDateFormat = yValue && /^\d{4}-\d{2}-\d{2}$/.test(String(yValue));
         const isStrikePriceMode = yValue != null && !isDateFormat && /^\d+$/.test(String(yValue).trim());
-        const filteredTrades = isStrikePriceMode ? trades.filter(t => String(t.Strike_Price).trim() === String(yValue).trim()) : trades;
+        const filteredTrades = isStrikePriceMode
+            ? trades.filter(t => String(t.Strike_Price).trim() === String(yValue).trim())
+            : trades;
+    
         const tradesByType = filteredTrades.reduce((acc, trade) => {
             const rawSide = trade.Side || "";
             const rawType = trade.Option_Type || "";
             let side = rawSide.trim().toLowerCase();
-            if (["buy", "buyoption"].includes(side)) side = "buy"; else if (["sell"].includes(side)) side = "sell";
+            if (["buy", "buyoption"].includes(side)) side = "buy"; 
+            else if (["sell"].includes(side)) side = "sell";
             let type = rawType.trim().toLowerCase();
-            if (["call", "calls"].includes(type)) type = "call"; else if (["put", "puts"].includes(type)) type = "put";
+            if (["call", "calls"].includes(type)) type = "call"; 
+            else if (["put", "puts"].includes(type)) type = "put";
             const normalizedSide = side ? side.charAt(0).toUpperCase() + side.slice(1) : "";
             const normalizedType = type ? type.charAt(0).toUpperCase() + type.slice(1) : "";
             const tradeTypeKey = `${normalizedSide} ${normalizedType}`.trim();
-
+    
             if (['Buy Call', 'Sell Call', 'Buy Put', 'Sell Put'].includes(tradeTypeKey)) {
-                if (!acc[tradeTypeKey]) { acc[tradeTypeKey] = []; }
+                if (!acc[tradeTypeKey]) acc[tradeTypeKey] = [];
                 acc[tradeTypeKey].push(trade);
             }
             return acc;
         }, {});
-
+    
         const getDoughnutChartData = (typeTrades) => {
             const total = typeTrades.length;
             const byField = typeTrades.reduce((acc, t) => {
                 const key = isStrikePriceMode
                     ? (t.Expiration_Date ? formatExpirationLabel(t.Expiration_Date) : "Unknown")
                     : (t.Strike_Price ? formatStrikeLabel(t.Strike_Price) : "Unknown");
-                if (!acc[key]) {
-                    acc[key] = { count: 0, entryValue: 0 };
-                }
+                if (!acc[key]) acc[key] = { count: 0, entryValue: 0 };
                 acc[key].count += 1;
                 acc[key].entryValue += t.Entry_Value || 0;
                 return acc;
             }, {});
         
-            const entries = Object.entries(byField).map(([label, obj]) => ({
+            let entries = Object.entries(byField).map(([label, obj]) => ({
                 label,
                 count: obj.count,
                 entryValue: obj.entryValue,
                 percentage: total > 0 ? ((obj.count / total) * 100).toFixed(2) : 0,
             }));
         
-            entries.sort((a, b) => b.count - a.count);
+            let labels, values, colors;
         
-            const labels = entries.map(({ label }) => label);
-            const values = entries.map(({ percentage }) => percentage);
-            const colors = generateCustomGradientColors('#283254', '#868dba', values);
+            if (sortMode === "entryValue") {
+                // 🔹 Sort by entry value
+                entries.sort((a, b) => b.entryValue - a.entryValue);
+        
+                // 🔹 Slice size = entryValue
+                labels = entries.map(e => e.label);
+                values = entries.map(e => e.entryValue);
+        
+                // 🔹 Colors scaled by entryValue
+                const maxEntry = Math.max(...values, 1);
+                const valuesForColor = values.map(v => (v / maxEntry) * 100);
+                colors = generateCustomGradientColors('#283254', '#868dba', valuesForColor);
+            } else {
+                // 🔹 Sort by distribution (count)
+                entries.sort((a, b) => b.count - a.count);
+        
+                // 🔹 Slice size = count %
+                labels = entries.map(e => e.label);
+                values = entries.map(e => e.percentage);
+        
+                // 🔹 Colors scaled by percentage
+                colors = generateCustomGradientColors('#283254', '#868dba', values);
+            }
         
             return {
                 labels,
                 datasets: [{
-                    label: isStrikePriceMode ? 'Expiration Date %' : 'Strike Price %',
+                    label: isStrikePriceMode ? 'Expiration Date' : 'Strike Price',
                     data: values,
                     backgroundColor: colors.slice(0, values.length),
                     borderColor: '#121212',
@@ -806,11 +859,13 @@ export default function DetailsBar({ activeTab,
                     extra: entries.map(e => ({
                         entryValue: e.entryValue,
                         percentage: e.percentage,
+                        count: e.count,
                     })),
                 }],
             };
         };
         
+    
         const chartOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -848,7 +903,7 @@ export default function DetailsBar({ activeTab,
                 },
             },
         };
-        
+    
         const renderChart = (tradeType) => {
             const typeTrades = tradesByType[tradeType] || [];
             const tradeCount = typeTrades.length;
@@ -856,10 +911,7 @@ export default function DetailsBar({ activeTab,
             return (
                 <div key={tradeType} style={styles.chartBox}>
                     <div style={styles.chartTitle}> {tradeType} 
-                        <div style={{ fontSize: 10, 
-                                      fontWeight: 400, 
-                                      color: "rgb(154, 154, 154)" 
-                                    }}> 
+                        <div style={{ fontSize: 10, fontWeight: 400, color: "rgb(154, 154, 154)" }}> 
                             {tradeCount} Trade{tradeCount !== 1 ? 's' : ''}
                             {totalTrades > 0 && ` (${percentage}%)`}
                         </div> 
@@ -874,24 +926,94 @@ export default function DetailsBar({ activeTab,
                 </div>
             );
         };
-
+    
         const totalTrades = trades.length;
         const blockTradesCount = selectedSegment?.blockTrades?.length || 0;
         const totalValue = selectedSegment?.value ? formatStrikeLabel(selectedSegment.value) : 0;
         const entryDate = selectedSegment?.day ? formatExpirationLabel(selectedSegment.day) : 'N/A';
         const segmentTime = selectedSegment?.segment || 'N/A';
         const yLabel = isStrikePriceMode ? 'Strike Price' : 'Expiration Date';
-        const yValueFormat = yValue != null ? (isStrikePriceMode ? formatStrikeLabel(selectedSegment.y) : formatExpirationLabel(selectedSegment.y)) : 'N/A';
-
+        const yValueFormat = yValue != null
+            ? (isStrikePriceMode ? formatStrikeLabel(selectedSegment.y) : formatExpirationLabel(selectedSegment.y))
+            : 'N/A';
+    
         return (
             <div style={styles.content}>
-                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc',  display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px', }}>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'  }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Entry Date </div> <span><CustomTooltip content={`Entry: ${entryDate} | Timeframe: ${segmentTime}`}> {entryDate} | {segmentTime} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> {yLabel} </div> <span><CustomTooltip content={`${yLabel}: ${yValueFormat}`}> {yValueFormat} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Trades </div> <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'  }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> Total Values </div> <span><CustomTooltip content={`Total values: ${totalValue}`}> {totalValue} </CustomTooltip> </span> </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)'  }}> <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)'  }}> BlockTrades </div> <span><CustomTooltip content={`Number of Block Trades in this timeframe: ${blockTradesCount}`}> {blockTradesCount} </CustomTooltip> </span> </div>
+                {/* 🔹 Info Bar */}
+                <div
+            style={{
+                paddingBottom: '12px',
+                marginBottom: '4px',
+                borderBottom: '1px solid #444',
+                color: '#ccc',
+                display: 'flex',
+                justifyContent: 'center',
+                flexWrap: 'wrap',
+                gap: '30px',
+                alignItems: 'center',
+            }}
+        >
+            {/* Sort Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CustomTooltip content={
+                    sortMode === "count"
+                        ? "Charts are sorted by number of trades"
+                        : "Charts are sorted by entry value"
+                }>
+                    <button
+                        onClick={() =>
+                            setSortMode(sortMode === "entryValue" ? "count" : "entryValue")
+                        }
+                        style={{
+                            padding: "4px 10px",
+                            fontSize: "12px",
+                            borderRadius: "6px",
+                            border: "1px solid   #41486d",
+                            backgroundColor: "#222",
+                            color: "#ccc",
+                            cursor: "pointer",
+                        }}
+                    >
+                        {sortMode === "entryValue" ? "Entry Value" : "Distribution"}
+                    </button>
+                    </CustomTooltip>
                 </div>
+
+            {/* Info Items */}
+            {[{
+                label: 'Entry Date',
+                value: `${entryDate} | ${segmentTime}`,
+                tooltip: `Entry: ${entryDate} | Timeframe: ${segmentTime}`
+            }, {
+                label: yLabel,
+                value: yValueFormat,
+                tooltip: `${yLabel}: ${yValueFormat}`
+            }, {
+                label: 'Total Trades',
+                value: totalTrades,
+                tooltip: `Total Trades: ${totalTrades}`
+            }, {
+                label: 'Total Values',
+                value: totalValue,
+                tooltip: `Total values: ${totalValue}`
+            }, {
+                label: 'BlockTrades',
+                value: blockTradesCount,
+                tooltip: `Number of Block Trades in this timeframe: ${blockTradesCount}`
+            }].map((item, idx) => (
+                <div key={idx} style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                    <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>
+                        {item.label}
+                    </div>
+                    <span>
+                        <CustomTooltip content={item.tooltip}>{item.value}</CustomTooltip>
+                    </span>
+                </div>
+            ))}
+        </div>
+
+
+                {/* 🔹 Charts Grid */}
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <div style={styles.grid}>
                         {['Buy Call', 'Sell Call', 'Buy Put', 'Sell Put'].map(renderChart)}
@@ -901,14 +1023,14 @@ export default function DetailsBar({ activeTab,
         );
     };
     
+    
     const renderInsightMarketExposure = () => {
         const segmentData = selectedSegment?.segmentData || {};
         const mode = selectedSegment?.mode || segmentData?.chartMode || 'strikePrice';
         const { groupKey, groupedData = {}, oiData = {}, ndeData = 0, ngeData = 0, timeframe = 'N/A' } = segmentData;
         const isStrikePriceMode = mode === 'strikePrice';
         const tradesByType = groupedData;
-
-        console.log("renderInsightMarketExposure called with segment:", { selectedSegment, mode, isStrikePriceMode });
+    
 
         const getDoughnutChartData = (typeTrades) => {
             const total = typeTrades.length;
@@ -916,36 +1038,53 @@ export default function DetailsBar({ activeTab,
                 const key = isStrikePriceMode
                     ? (t.Expiration_Date ? formatExpirationLabel(t.Expiration_Date) : "Unknown")
                     : (t.Strike_Price ? formatStrikeLabel(t.Strike_Price) : "Unknown");
-                if (!acc[key]) {
-                    acc[key] = { count: 0, entryValue: 0 };
-                }
+                if (!acc[key]) acc[key] = { count: 0, entryValue: 0 };
                 acc[key].count += 1;
                 acc[key].entryValue += t.Entry_Value || 0;
                 return acc;
             }, {});
+    
             const entries = Object.entries(byField).map(([label, obj]) => ({
                 label,
                 count: obj.count,
                 entryValue: obj.entryValue,
                 percentage: total > 0 ? ((obj.count / total) * 100).toFixed(2) : 0,
             }));
-            entries.sort((a, b) => b.count - a.count);
-            const labels = entries.map(({ label }) => label);
-            const values = entries.map(({ percentage }) => percentage);
-            const colors = generateCustomGradientColors('#283254', '#868dba', values);
+    
+            let labels, values, colors;
+    
+            // Conditional sorting logic based on the sortMode state
+            if (sortMode === "entryValue") {
+                // Sort by entry value
+                entries.sort((a, b) => b.entryValue - a.entryValue);
+                labels = entries.map(e => e.label);
+                values = entries.map(e => e.entryValue);
+                // Colors scaled by entryValue
+                const maxEntry = Math.max(...values, 1);
+                const valuesForColor = values.map(v => (v / maxEntry) * 100);
+                colors = generateCustomGradientColors('#283254', '#868dba', valuesForColor);
+            } else {
+                // Default: Sort by distribution (count)
+                entries.sort((a, b) => b.count - a.count);
+                labels = entries.map(e => e.label);
+                values = entries.map(e => e.percentage);
+                // Colors scaled by percentage
+                colors = generateCustomGradientColors('#283254', '#868dba', values);
+            }
+    
             return {
                 labels,
                 datasets: [{
-                    label: isStrikePriceMode ? 'Expiration Date %' : 'Strike Price %',
+                    label: isStrikePriceMode ? 'Expiration Date' : 'Strike Price',
                     data: values,
                     backgroundColor: colors.slice(0, values.length),
                     borderColor: '#121212',
                     borderWidth: 1,
-                    extra: entries.map(e => ({ entryValue: e.entryValue, percentage: e.percentage })),
+                    extra: entries.map(e => ({ entryValue: e.entryValue, percentage: e.percentage, count: e.count })), // Ensure 'count' is also in 'extra' for the tooltip.
                 }],
             };
         };
-
+    
         const chartOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -958,15 +1097,10 @@ export default function DetailsBar({ activeTab,
                     callbacks: {
                         label: (context) => {
                             const dataset = context.dataset;
-                            const index = context.dataIndex;
-                            const extra = dataset.extra?.[index];
-                            if (extra) {
-                                return [
-                                    ` Distribution: ${extra.percentage}%`,
-                                    ` Total Value: ${formatStrikeLabel(extra.entryValue)}`
-                                ];
-                            }
-                            return ` ${context.raw}%`;
+                            const extra = dataset.extra?.[context.dataIndex];
+                            return extra
+                                ? [` Distribution: ${extra.percentage}%`, ` Total Value: ${formatStrikeLabel(extra.entryValue)}`]
+                                : ` ${context.raw}%`;
                         },
                     },
                 },
@@ -983,12 +1117,13 @@ export default function DetailsBar({ activeTab,
                 },
             },
         };
-
+    
         const renderChart = (tradeType) => {
             const typeTrades = tradesByType[tradeType] || [];
             const tradeCount = typeTrades.length;
             const totalTrades = Object.values(tradesByType).reduce((sum, arr) => sum + arr.length, 0);
             const percentage = totalTrades > 0 ? ((tradeCount / totalTrades) * 100).toFixed(1) : 0;
+    
             return (
                 <div key={tradeType} style={styles.chartBox}>
                     <div style={styles.chartTitle}>
@@ -1007,66 +1142,82 @@ export default function DetailsBar({ activeTab,
                 </div>
             );
         };
-
+    
         const allTrades = Object.values(tradesByType).flat();
         const totalTrades = allTrades.length;
         const totalValue = allTrades.reduce((sum, t) => sum + (t.Entry_Value || 0), 0);
         const blockTradesCount = allTrades.reduce((sum, t) => sum + (t.BlockTrade_Count || 0), 0);
         const yLabel = isStrikePriceMode ? 'Strike Price' : 'Expiration Date';
-        const yValueFormat = groupKey != null 
-            ? (isStrikePriceMode 
-                ? formatStrikeLabel(typeof groupKey === 'string' && groupKey.includes('k') ? parseInt(groupKey.replace('k', '') * 1000) : groupKey) 
-                : formatExpirationLabel(groupKey)) 
+        const yValueFormat = groupKey != null
+            ? (isStrikePriceMode
+                ? formatStrikeLabel(typeof groupKey === 'string' && groupKey.includes('k') ? parseInt(groupKey.replace('k', '') * 1000) : groupKey)
+                : formatExpirationLabel(groupKey))
             : 'N/A';
         const formattedOiCall = oiData.Call != null ? (Math.abs(oiData.Call) >= 1000 ? `${(oiData.Call / 1000).toFixed(1)}k` : oiData.Call.toFixed(0)) : 'N/A';
         const formattedOiPut = oiData.Put != null ? (Math.abs(oiData.Put) >= 1000 ? `${(oiData.Put / 1000).toFixed(1)}k` : oiData.Put.toFixed(0)) : 'N/A';
         const formattedNde = Math.abs(ndeData) >= 1000 ? `${(ndeData / 1000).toFixed(1)}k` : ndeData.toFixed(0);
         const formattedNge = Math.abs(ngeData) >= 1000 ? `${(ngeData / 1000).toFixed(1)}k` : ngeData.toFixed(2);
-
+    
         return (
             <div style={styles.content}>
-                <div style={{ paddingBottom: '12px', marginBottom: '4px', borderBottom: '1px solid #444', color: '#ccc', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '30px' }}>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Timeframe </div>
-                                <span>
-                        <CustomTooltip content={`Timeframe: From ${timeframe === 'today' ? 'today' : `${timeframe} day${timeframe === '1' ? '' : 's'} ago`}`}> 
-                            {timeframe === 'today' ? 'Today' : `${timeframe} day${timeframe === '1' ? '' : 's'} ago`} 
+                {/* 🔹 Centered Info Bar with the new switch button */}
+                <div style={{
+                    paddingBottom: '12px',
+                    marginBottom: '4px',
+                    borderBottom: '1px solid #444',
+                    color: '#ccc',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    flexWrap: 'wrap',
+                    gap: '30px',
+                    alignItems: 'center',
+                }}>
+                    {/* Sort Button */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CustomTooltip content={
+                            sortMode === "count"
+                                ? "Charts are sorted by number of trades (Distribution)"
+                                : "Charts are sorted by entry value"
+                        }>
+                            <button
+                                onClick={() => setSortMode(sortMode === "entryValue" ? "count" : "entryValue")}
+                                style={{
+                                    padding: "4px 10px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    border: "1px solid  #41486d",
+                                    backgroundColor: "#222",
+                                    color: "#ccc",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                {sortMode === "entryValue" ? "Entry Value" : "Distribution"}
+                            </button>
                         </CustomTooltip>
-                    </span>
                     </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> {yLabel} </div>
-                        <span><CustomTooltip content={`${yLabel}: ${yValueFormat}`}> {yValueFormat} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Trades </div>
-                        <span><CustomTooltip content={`Total Trades: ${totalTrades}`}> {totalTrades} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Total Values </div>
-                        <span><CustomTooltip content={`Total values: ${formatStrikeLabel(totalValue)}`}> ${formatStrikeLabel(totalValue)} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> BlockTrades </div>
-                        <span><CustomTooltip content={`Number of Block Trades in this timeframe: ${blockTradesCount}`}> {blockTradesCount} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Call OI Change </div>
-                        <span><CustomTooltip content={`Call OI Change: ${formattedOiCall}`}> {formattedOiCall} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Put OI Change </div>
-                        <span><CustomTooltip content={`Put OI Change: ${formattedOiPut}`}> {formattedOiPut} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Net Delta Exposure </div>
-                        <span><CustomTooltip content={`Net Delta Exposure: ${formattedNde}`}> {formattedNde} </CustomTooltip></span>
-                    </div>
-                    <div style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
-                        <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}> Net Gamma Exposure </div>
-                        <span><CustomTooltip content={`Net Gamma Exposure: ${formattedNge}`}> {formattedNge} </CustomTooltip></span>
-                    </div>
+    
+                    {/* Info Items */}
+                    {[
+                        { label: 'Timeframe', value: timeframe === 'today' ? 'Today' : `${timeframe} day${timeframe === '1' ? '' : 's'} ago`, tooltip: `Timeframe: From ${timeframe === 'today' ? 'today' : `${timeframe} day${timeframe === '1' ? '' : 's'} ago`}` },
+                        { label: yLabel, value: yValueFormat, tooltip: `${yLabel}: ${yValueFormat}` },
+                        { label: 'Total Trades', value: totalTrades, tooltip: `Total Trades: ${totalTrades}` },
+                        { label: 'Total Values', value: `$${formatStrikeLabel(totalValue)}`, tooltip: `Total values: ${formatStrikeLabel(totalValue)}` },
+                        { label: 'BlockTrades', value: blockTradesCount, tooltip: `Number of Block Trades in this timeframe: ${blockTradesCount}` },
+                        { label: 'Call OI Change', value: formattedOiCall, tooltip: `Call OI Change: ${formattedOiCall}` },
+                        { label: 'Put OI Change', value: formattedOiPut, tooltip: `Put OI Change: ${formattedOiPut}` },
+                        { label: 'Net Delta Exposure', value: formattedNde, tooltip: `Net Delta Exposure: ${formattedNde}` },
+                        { label: 'Net Gamma Exposure', value: formattedNge, tooltip: `Net Gamma Exposure: ${formattedNge}` },
+                    ].map((item, idx) => (
+                        <div key={idx} style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
+                            <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>
+                                {item.label}
+                            </div>
+                            <span><CustomTooltip content={item.tooltip}>{item.value}</CustomTooltip></span>
+                        </div>
+                    ))}
                 </div>
+    
+                {/* 🔹 Charts Grid */}
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <div style={styles.grid}>
                         {['Buy Call', 'Sell Call', 'Buy Put', 'Sell Put'].map(renderChart)}
@@ -1075,6 +1226,7 @@ export default function DetailsBar({ activeTab,
             </div>
         );
     };
+    
 
     const renderDefault = () => (
         <div style={styles.content}>

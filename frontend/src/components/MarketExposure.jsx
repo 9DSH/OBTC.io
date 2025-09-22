@@ -328,11 +328,56 @@ const customTooltip = (context) => {
     return;
   }
 
+  // Clear previous content
   tooltipEl.innerHTML = '';
 
   const title = tooltipModel.title[0] || '';
-  const bodyLines = tooltipModel.body.map(b => b.lines).flat();
+  const chart = context.chart;
+  const dataIndex = tooltipModel.dataPoints[0]?.dataIndex;
+  if (dataIndex === undefined) return;
 
+  const datasets = chart.data.datasets;
+  const putMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'Put'));
+  const callMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'Call'));
+  const ndeMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'NDE'));
+  const ngeMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'NGE'));
+
+  const lines = [];
+
+  // Aggregate data for the tooltip
+  if (putMeta && !putMeta.hidden) {
+    const putData = datasets[putMeta.index].data[dataIndex];
+    const callData = callMeta ? datasets[callMeta.index].data[dataIndex] : 0;
+    const totalOI = Math.abs(putData) + Math.abs(callData);
+    const putPercentage = totalOI > 0 ? (Math.abs(putData) / totalOI * 100).toFixed(2) : '0.00';
+    lines.push({ label: `Put OI Change: ${putData.toFixed(0)} (${putPercentage}%)`, color: COLORS.Put });
+  }
+
+  if (callMeta && !callMeta.hidden) {
+    const callData = datasets[callMeta.index].data[dataIndex];
+    const putData = putMeta ? datasets[putMeta.index].data[dataIndex] : 0;
+    const totalOI = Math.abs(putData) + Math.abs(callData);
+    const callPercentage = totalOI > 0 ? (Math.abs(callData) / totalOI * 100).toFixed(2) : '0.00';
+    lines.push({ label: `Call OI Change: ${callData.toFixed(0)} (${callPercentage}%)`, color: COLORS.Call });
+  }
+
+  if (ndeMeta && !ndeMeta.hidden) {
+    const ndeData = chart.options.originalNdeData[dataIndex];
+    const formattedNde = ndeData >= 1000 || ndeData <= -1000
+      ? `${(ndeData / 1000).toFixed(1)}k`
+      : ndeData.toFixed(0);
+    lines.push({ label: `Net Delta Exposure: ${formattedNde}`, color: COLORS.NDE });
+  }
+
+  if (ngeMeta && !ngeMeta.hidden) {
+    const ngeData = chart.options.originalNgeData[dataIndex];
+    const formattedNge = ngeData >= 1000 || ngeData <= -1000
+      ? `${(ngeData / 1000).toFixed(1)}k`
+      : ngeData.toFixed(2);
+    lines.push({ label: `Net Gamma Exposure: ${formattedNge}`, color: COLORS.NGE });
+  }
+
+  // Create tooltip content
   const tooltipContent = document.createElement('div');
   tooltipContent.style.backgroundColor = '#2a2a34';
   tooltipContent.style.border = '1px solid rgb(51, 51, 51)';
@@ -354,23 +399,12 @@ const customTooltip = (context) => {
     tooltipContent.appendChild(titleDiv);
   }
 
-  bodyLines.forEach(line => {
+  lines.forEach(({ label, color }) => {
     const lineDiv = document.createElement('div');
     lineDiv.style.backgroundColor = '#2a2a34';
     lineDiv.style.borderRadius = '10px';
     lineDiv.style.padding = '3px 10px';
     lineDiv.style.alignItems = 'center';
-
-    let color = '';
-    if (line.includes('Put OI Change')) {
-      color = COLORS.Put;
-    } else if (line.includes('Call OI Change')) {
-      color = COLORS.Call;
-    } else if (line.includes('Net Delta Exposure')) {
-      color = COLORS.NDE;
-    } else if (line.includes('Net Gamma Exposure')) {
-      color = COLORS.NGE;
-    }
 
     if (color) {
       const colorSpan = document.createElement('span');
@@ -383,7 +417,7 @@ const customTooltip = (context) => {
     }
 
     const textSpan = document.createElement('span');
-    textSpan.textContent = line;
+    textSpan.textContent = label;
     lineDiv.appendChild(textSpan);
 
     tooltipContent.appendChild(lineDiv);
@@ -558,7 +592,6 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
     });
     const maxAbsNGE = maxTotalNGE || 1;
 
-    // Use the maximum of NDE and NGE for the shared y-axis scale
     const maxAbsGreeks = Math.max(maxAbsNDE, maxAbsNGE);
     const scaleFactorNDE = (maxAbsGreeks > 0 && maxAbsNDE > 0) ? (maxAbsGreeks / maxAbsNDE) : 1;
     const scaleFactorNGE = (maxAbsGreeks > 0 && maxAbsNGE > 0) ? (maxAbsGreeks / maxAbsNGE) : 1;
@@ -630,7 +663,6 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
     };
   }, [data, chains, filters, timeframe, chartMode]);
 
-
   const options = useMemo(() => {
     const yLimit = maxAbsOI * 1.1;
     const greeksLimit = Math.max(maxAbsNDE, maxAbsNGE) * 1.1;
@@ -656,6 +688,8 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
         tooltip: {
           enabled: false,
           external: customTooltip,
+          mode: 'index',
+          intersect: false,
           callbacks: {
             title: (context) => {
               if (!context[0]) return '';
@@ -663,50 +697,8 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
                 ? `Strike Price: ${context[0].label}`
                 : `Expiration Date: ${context[0].label}`;
             },
-            label: (context) => {
-              const { dataIndex, chart } = context;
-              const datasets = chart.data.datasets;
-      
-              const lines = [];
-      
-              const putMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'Put'));
-              const callMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'Call'));
-              const ndeMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'NDE'));
-              const ngeMeta = chart.getDatasetMeta(datasets.findIndex(d => d.label === 'NGE'));
-      
-              if (putMeta && !putMeta.hidden) {
-                const putData = datasets[putMeta.index].data[dataIndex];
-                const callData = callMeta ? datasets[callMeta.index].data[dataIndex] : 0;
-                const totalOI = Math.abs(putData) + Math.abs(callData);
-                const putPercentage = totalOI > 0 ? (Math.abs(putData) / totalOI * 100).toFixed(2) : '0.00';
-                lines.push(`Put OI Change: ${putData.toFixed(0)} (${putPercentage}%)`);
-              }
-      
-              if (callMeta && !callMeta.hidden) {
-                const callData = datasets[callMeta.index].data[dataIndex];
-                const putData = putMeta ? datasets[putMeta.index].data[dataIndex] : 0;
-                const totalOI = Math.abs(putData) + Math.abs(callData);
-                const callPercentage = totalOI > 0 ? (Math.abs(callData) / totalOI * 100).toFixed(2) : '0.00';
-                lines.push(`Call OI Change: ${callData.toFixed(0)} (${callPercentage}%)`);
-              }
-      
-              if (ndeMeta && !ndeMeta.hidden) {
-                const ndeData = originalNdeData[dataIndex];
-                const formattedNde = ndeData >= 1000 || ndeData <= -1000
-                  ? `${(ndeData / 1000).toFixed(1)}k`
-                  : ndeData.toFixed(0);
-                lines.push(`Net Delta Exposure: ${formattedNde}`);
-              }
-              
-              if (ngeMeta && !ngeMeta.hidden) {
-                const ngeData = originalNgeData[dataIndex];
-                const formattedNge = ngeData >= 1000 || ngeData <= -1000
-                  ? `${(ngeData / 1000).toFixed(1)}k`
-                  : ngeData.toFixed(2);
-                lines.push(`Net Gamma Exposure: ${formattedNge}`);
-              }
-      
-              return lines;
+            label: () => {
+              return [];
             },
           },
         },
@@ -797,7 +789,7 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
           border: { display: true, color: 'rgba(114, 114, 114, 0.3)' },
           title: {
             display: true,
-            text: [ 'Net Delta Exposure','Net Gamma Exposure'],
+            text: ['Net Delta Exposure', 'Net Gamma Exposure'],
             color: "#777",
             font: [
               { size: 12, weight: 500, family: "'Roboto',sans-serif" },
@@ -808,6 +800,9 @@ export default function MarketExposure({ data = [], chains = [], filters = {}, o
           },
         },
       },
+      // Store original data for access in customTooltip
+      originalNdeData,
+      originalNgeData,
       onClick: (event, elements, chart) => {
         if (elements.length === 0) {
           console.warn('No elements clicked in chart');
