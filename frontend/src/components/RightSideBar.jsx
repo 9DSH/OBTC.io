@@ -5,7 +5,7 @@ import Tooltip from '@mui/material/Tooltip';
 
 export default function RightSideBar({ activeTab, selectedSegment, filters, contextId, onSegmentSelect }) {
   const [isManuallyMinimized, setIsManuallyMinimized] = useState(true);
-  const [viewMode, setViewMode] = useState('combo');
+  const [viewMode, setViewMode] = useState('block');
   const [expandedTradeIds, setExpandedTradeIds] = useState(new Set());
   const [expandedGroupIds, setExpandedGroupIds] = useState(new Set());
   const [sortBy, setSortBy] = useState('entryValue');

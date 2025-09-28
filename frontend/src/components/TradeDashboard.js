@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 import AccountBar from './AccountBar';
 import TechnicalBar from './TechnicalBar';
-import LiveOptionTab from './Simulation/LiveOptionTab'
 import SimulationTab from './Simulation/SimulationTab'
-import TabsBar from './TabsBar';
 
 export default function TradeDashboard({ 
                                     chains,
@@ -16,18 +14,8 @@ export default function TradeDashboard({
                                     priceLoading,
                                     simulateData }) {
 
-  const [activeTab, setActiveTab] = useState('Simulation');
 
-  
-  useEffect(() => {
-    if (simulateData) {
-      console.log("TradeDashboard: received simulateData:", simulateData);
-      setActiveTab("Simulation");   // 👈 switch automatically
-    }
-  }, [simulateData]);
 
-  
-  const tabNames = ['Simulation', 'Live Trade Option'];
   if (loading) {
         return (
           <div style={{
@@ -43,27 +31,9 @@ export default function TradeDashboard({
           </div>
         );
       }
-  
-  // -------------------- TabBar Container -------------------------------------
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      
-      case 'Simulation':
-        return (
-          <SimulationTab 
-                chains={chains} 
-                trades={trades} 
-                btcPrice={btcprice}
-                simulateData={simulateData}
-                />
-        );
-      case 'Live Trade Option':
-          return (
-            <LiveOptionTab/>
-          );
-    }
-  };
+
+
   return (
         <div
        // Main Trade Dashboard Container  --------------------
@@ -85,21 +55,17 @@ export default function TradeDashboard({
           {/* Fixed User bar container */}
       <AccountBar/>
 
-      {/* Tab Navigation */}
-      <div style={{marginTop: '50px'}}>
-      <TabsBar
-          activeTab={activeTab}
-          setActiveTab={(tab) => {
-            setActiveTab(tab);
-          }}
-          tabNames={tabNames}
-      />
-      </div>
 
       
       {/* Main Content Area for TabBars */}
       
-      <div style={{ flex: 1, padding: '0 20px' }}>{renderTabContent()}</div>
+      <div style={{ flex: 1, padding: '0 20px', marginTop: "40px" }}>         
+         <SimulationTab 
+                chains={chains} 
+                trades={trades} 
+                btcPrice={btcprice}
+                simulateData={simulateData}
+                /></div>
     
         </div>
       );

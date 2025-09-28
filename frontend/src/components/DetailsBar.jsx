@@ -1205,8 +1205,8 @@ export default function DetailsBar({ activeTab,
                         { label: 'BlockTrades', value: blockTradesCount, tooltip: `Number of Block Trades in this timeframe: ${blockTradesCount}` },
                         { label: 'Call OI Change', value: formattedOiCall, tooltip: `Call OI Change: ${formattedOiCall}` },
                         { label: 'Put OI Change', value: formattedOiPut, tooltip: `Put OI Change: ${formattedOiPut}` },
-                        { label: 'Net Delta Exposure', value: formattedNde, tooltip: `Net Delta Exposure: ${formattedNde}` },
-                        { label: 'Net Gamma Exposure', value: formattedNge, tooltip: `Net Gamma Exposure: ${formattedNge}` },
+                        { label: 'NDE', value: formattedNde, tooltip: `Net Delta Exposure: ${formattedNde}` },
+                        { label: 'NGE', value: formattedNge, tooltip: `Net Gamma Exposure: ${formattedNge}` },
                     ].map((item, idx) => (
                         <div key={idx} style={{ fontSize: 'clamp(9px, 1vw, 12px)' }}>
                             <div style={{ color: 'rgb(145, 145, 145)', fontSize: 'clamp(8px, 1vw, 10px)' }}>
