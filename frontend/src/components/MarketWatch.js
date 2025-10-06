@@ -130,7 +130,7 @@ export default function MarketWatch({
         bottom: 10,
         fontSize: 'clamp(9px, 1vw,10px)', color: "#444"
       }}>
-        v1.0.73
+        v1.0.74
       </div>
 
       <TechnicalBar
