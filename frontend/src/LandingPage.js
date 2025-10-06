@@ -263,17 +263,16 @@ export default function LandingPage() {
   const [launchApp, setLaunchApp] = useState(false);
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/home"
-          element={<LandingWrapper launchApp={launchApp} setLaunchApp={setLaunchApp} />}
-        />
-        <Route
-          path="/*"
-          element={<LandingWrapper launchApp={launchApp} setLaunchApp={setLaunchApp} />}
-        />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route
+        path="/home"
+        element={<LandingWrapper launchApp={launchApp} setLaunchApp={setLaunchApp} />}
+      />
+      <Route
+        path="/*"
+        element={<LandingWrapper launchApp={launchApp} setLaunchApp={setLaunchApp} />}
+      />
+    </Routes>
   );
 }
+
