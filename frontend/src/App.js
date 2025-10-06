@@ -114,37 +114,35 @@ export default function App({ goToLanding }) {
   return (
     <div className="fill" style={{ padding: "20px", display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", position: "relative" }}>
       <MainMenu loading={loading} goToLanding={handleGoToLanding} />
-      {!loading && (
-        <Routes>
-          <Route
-            path="/market-watch"
-            element={<MarketWatch
-              trades={trades}
-              chains={chains}
-              loading={loading}
-              analytics={analytics}
-              analyticsLoading={false}
-              btcprice={btcprice}
-              priceLoading={false}
-              onSimulate={setSimulateData}
-            />}
-          />
-          <Route
-            path="/simulation"
-            element={<TradeDashboard
-              trades={trades}
-              chains={chains}
-              loading={loading}
-              analytics={analytics}
-              analyticsLoading={false}
-              btcprice={btcprice}
-              priceLoading={false}
-              simulateData={simulateData}
-            />}
-          />
-          <Route path="*" element={<Navigate to="/market-watch" replace />} />
-        </Routes>
-      )}
+      <Routes>
+        <Route
+          path="/market-watch"
+          element={<MarketWatch
+            trades={trades}
+            chains={chains}
+            loading={loading} // MarketWatch can show spinner while trades load
+            analytics={analytics}
+            analyticsLoading={false}
+            btcprice={btcprice}
+            priceLoading={false}
+            onSimulate={setSimulateData}
+          />}
+        />
+        <Route
+          path="/simulation"
+          element={<TradeDashboard
+            trades={trades}
+            chains={chains}
+            loading={loading}
+            analytics={analytics}
+            analyticsLoading={false}
+            btcprice={btcprice}
+            priceLoading={false}
+            simulateData={simulateData}
+          />}
+        />
+        <Route path="*" element={<Navigate to="/market-watch" replace />} />
+      </Routes>
     </div>
   );
 }
