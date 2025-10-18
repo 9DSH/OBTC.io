@@ -49,8 +49,47 @@ export default function MarketWatch({
       .sort((a, b) => new Date(a) - new Date(b))
   ), [filteredTrades]);
 
-  const maxEntryValue = DEFAULT_FILTERS.Entry_Value[1];
-  const maxSize = DEFAULT_FILTERS.Size[1];
+  const maxEntryValue = React.useMemo(() => {
+    if (!Array.isArray(filteredTrades) || filteredTrades.length === 0) {
+      return DEFAULT_FILTERS.Entry_Value?.[1] ?? 0;
+    }
+  
+    const values = filteredTrades
+      .map(t => {
+        const v = parseFloat(t?.Entry_Value);
+        return Number.isFinite(v) ? v : null;
+      })
+      .filter(v => v !== null);
+  
+    if (values.length === 0) {
+      return DEFAULT_FILTERS.Entry_Value?.[1] ?? 0;
+    }
+  
+    const max = Math.max(...values);
+    return Number.isFinite(max) ? max : DEFAULT_FILTERS.Entry_Value?.[1] ?? 0;
+  }, [filteredTrades]);
+  
+
+  const maxSize = React.useMemo(() => {
+    if (!Array.isArray(filteredTrades) || filteredTrades.length === 0) {
+      return DEFAULT_FILTERS.Size?.[1] ?? 0;
+    }
+  
+    const values = filteredTrades
+      .map(t => {
+        const v = parseFloat(t?.Size);
+        return Number.isFinite(v) ? v : null;
+      })
+      .filter(v => v !== null);
+  
+    if (values.length === 0) {
+      return DEFAULT_FILTERS.Size?.[1] ?? 0;
+    }
+  
+    const max = Math.max(...values);
+    return Number.isFinite(max) ? max : DEFAULT_FILTERS.Size?.[1] ?? 0;
+  }, [filteredTrades]);
+  
 
 
   const tabNames = ['Insights', 'Strategies', 'Data Table'];

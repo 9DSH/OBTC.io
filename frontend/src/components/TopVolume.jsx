@@ -182,10 +182,21 @@ export default function TopVolume(props) {
   }, [data]);
 
   const { minValue, maxValue } = useMemo(() => {
-    const allValues = data.map(row => +row.Entry_Value).filter(v => !isNaN(v));
+    // Safely convert Entry_Value to a number
+    const allValues = data
+      .map(row => {
+        const val = parseFloat(row.Entry_Value);
+        return isFinite(val) ? val : null;
+      })
+      .filter(v => v !== null);
+  
+    if (allValues.length === 0) {
+      return { minValue: 0, maxValue: 0 };
+    }
+  
     return {
-      minValue: allValues.length ? Math.min(...allValues) : 0,
-      maxValue: allValues.length ? Math.max(...allValues) : 0,
+      minValue: Math.min(...allValues),
+      maxValue: Math.max(...allValues),
     };
   }, [data]);
 

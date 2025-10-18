@@ -101,9 +101,11 @@ function toValidDate(val) {
 }
 
 const numericSortType = (rowA, rowB, columnId) => {
-  const a = Number(rowA.values[columnId]) || 0;
-  const b = Number(rowB.values[columnId]) || 0;
-  return a > b ? 1 : a < b ? -1 : 0;
+  const a = parseFloat(rowA.values[columnId]);
+  const b = parseFloat(rowB.values[columnId]);
+  const safeA = isFinite(a) ? a : 0;
+  const safeB = isFinite(b) ? b : 0;
+  return safeA > safeB ? 1 : safeA < safeB ? -1 : 0;
 };
 
 const dateSortType = (rowA, rowB, columnId) => {
@@ -135,10 +137,12 @@ export default function DataTable({ data = [], filters = {} }) {
           return (!start || itemDate >= start) && (!end || itemDate <= end);
         }
         if ((key === 'Size' || key === 'Entry_Value') && Array.isArray(value)) {
-          const [min, max] = value.map(Number);
-          const val = Number(item[key]);
-          return !isNaN(val) && val >= min && val <= max;
+          const [min, max] = value.map(v => parseFloat(v));
+          const val = parseFloat(item[key]);
+          if (!isFinite(val)) return false;
+          return val >= (isFinite(min) ? min : 0) && val <= (isFinite(max) ? max : Number.MAX_SAFE_INTEGER);
         }
+        
         
         // LOGIC CHECK FOR BLOCKTRADES
         if (key === 'BlockTrade') {
@@ -263,10 +267,11 @@ export default function DataTable({ data = [], filters = {} }) {
   const visible = rows.slice(0, 9);
 
   const totalTrades = filteredData.length;
-  const totalEntryValue = filteredData.reduce(
-    (sum, trade) => sum + (parseFloat(trade.Entry_Value) || 0),
-    0
-  );
+  const totalEntryValue = filteredData.reduce((sum, trade) => {
+    const val = parseFloat(trade.Entry_Value);
+    return sum + (isFinite(val) ? val : 0);
+  }, 0);
+  
 
   const entryDates = filteredData
     .map((t) => toValidDate(t.Entry_Date))
