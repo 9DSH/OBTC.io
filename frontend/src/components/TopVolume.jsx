@@ -182,22 +182,16 @@ export default function TopVolume(props) {
   }, [data]);
 
   const { minValue, maxValue } = useMemo(() => {
-    // Safely convert Entry_Value to a number
     const allValues = data
-      .map(row => {
-        const val = parseFloat(row.Entry_Value);
-        return isFinite(val) ? val : null;
-      })
-      .filter(v => v !== null);
+      .map(row => parseFloat(row.Entry_Value))
+      .filter(v => Number.isFinite(v));
   
-    if (allValues.length === 0) {
-      return { minValue: 0, maxValue: 0 };
-    }
+    if (allValues.length === 0) return { minValue: 0, maxValue: 0 };
   
-    return {
-      minValue: Math.min(...allValues),
-      maxValue: Math.max(...allValues),
-    };
+    const minValue = allValues.reduce((min, v) => (v < min ? v : min), allValues[0]);
+    const maxValue = allValues.reduce((max, v) => (v > max ? v : max), allValues[0]);
+  
+    return { minValue, maxValue };
   }, [data]);
 
   const handleLegendClick = (range) => {
@@ -495,8 +489,12 @@ function HeatmapCore({
     }
     const plotData = Object.values(agg).filter(d => fixedXLabels.includes(d.x) && fixedYLabels.includes(d.y));
     const allValues = filteredData.map(row => +row.Entry_Value).filter(v => !isNaN(v));
-    const minValue = allValues.length ? Math.min(...allValues) : 0;
-    const maxValue = allValues.length ? Math.max(...allValues) : 0;
+    const minValue = allValues.length
+      ? allValues.reduce((min, v) => (v < min ? v : min), allValues[0])
+      : 0;
+    const maxValue = allValues.length
+      ? allValues.reduce((max, v) => (v > max ? v : max), allValues[0])
+      : 0;
     const groupIndices = Array.from(new Set(fixedXLabels.map(lbl => lbl.split(' ')[0]))).map((_, idx) => idx * 3).slice(1);
     return { plotData, groupIndices, minValue, maxValue };
   }, [filteredData, fixedXLabels, fixedYLabels, mode]);

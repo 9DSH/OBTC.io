@@ -274,12 +274,17 @@ export default function DataTable({ data = [], filters = {} }) {
   
 
   const entryDates = filteredData
-    .map((t) => toValidDate(t.Entry_Date))
-    .filter((d) => d.getFullYear() > 1900);
+  .map((t) => toValidDate(t.Entry_Date))
+  .filter((d) => d.getFullYear() > 1900);
 
-  const minDate = entryDates.length ? new Date(Math.min(...entryDates)) : null;
-  const maxDate = entryDates.length ? new Date(Math.max(...entryDates)) : null;
+  const minDate = entryDates.length
+    ? entryDates.reduce((min, d) => (d < min ? d : min), entryDates[0])
+    : null;
 
+  const maxDate = entryDates.length
+    ? entryDates.reduce((max, d) => (d > max ? d : max), entryDates[0])
+    : null;
+  
   const formatRangeDate = (d) =>
     d ? dayjs(d).format('DD MMM YY').toUpperCase() : '-';
 
