@@ -56,28 +56,27 @@ export default function MarketWatch({
   const maxEntryValue = useMemo(() => {
     if (!Array.isArray(filteredTrades) || filteredTrades.length === 0)
       return DEFAULT_FILTERS.Entry_Value?.[1] ?? 0;
-
-    const values = filteredTrades
-      .map(t => parseFloat(t?.Entry_Value))
-      .filter(Number.isFinite);
-
-    if (!values.length) return DEFAULT_FILTERS.Entry_Value?.[1] ?? 0;
-    const max = Math.max(...values);
+  
+    const max = filteredTrades.reduce((acc, t) => {
+      const val = parseFloat(t?.Entry_Value);
+      return Number.isFinite(val) ? Math.max(acc, val) : acc;
+    }, -Infinity);
+  
     return Number.isFinite(max) ? max : DEFAULT_FILTERS.Entry_Value?.[1] ?? 0;
   }, [filteredTrades]);
-
+  
   const maxSize = useMemo(() => {
     if (!Array.isArray(filteredTrades) || filteredTrades.length === 0)
       return DEFAULT_FILTERS.Size?.[1] ?? 0;
-
-    const values = filteredTrades
-      .map(t => parseFloat(t?.Size))
-      .filter(Number.isFinite);
-
-    if (!values.length) return DEFAULT_FILTERS.Size?.[1] ?? 0;
-    const max = Math.max(...values);
+  
+    const max = filteredTrades.reduce((acc, t) => {
+      const val = parseFloat(t?.Size);
+      return Number.isFinite(val) ? Math.max(acc, val) : acc;
+    }, -Infinity);
+  
     return Number.isFinite(max) ? max : DEFAULT_FILTERS.Size?.[1] ?? 0;
   }, [filteredTrades]);
+  
 
   const tabNames = ['Insights', 'Strategies', 'Data Table'];
 
