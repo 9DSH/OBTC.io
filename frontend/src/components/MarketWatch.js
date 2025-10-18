@@ -49,31 +49,8 @@ export default function MarketWatch({
       .sort((a, b) => new Date(a) - new Date(b))
   ), [filteredTrades]);
 
-  const maxEntryValue = React.useMemo(() => {
-    if (!filteredTrades || filteredTrades.length === 0) {
-      return DEFAULT_FILTERS.Entry_Value[1];
-    }
-
-    const values = filteredTrades
-      .map(t => parseFloat(t.Entry_Value))
-      .filter(v => Number.isFinite(v));
-
-    if (values.length === 0) return DEFAULT_FILTERS.Entry_Value[1];
-    return Math.max(...values);
-  }, [filteredTrades]);
-
-  const maxSize = React.useMemo(() => {
-    if (!filteredTrades || filteredTrades.length === 0) {
-      return DEFAULT_FILTERS.Size[1];
-    }
-
-    const values = filteredTrades
-      .map(t => parseFloat(t.Size))
-      .filter(v => Number.isFinite(v));
-
-    if (values.length === 0) return DEFAULT_FILTERS.Size[1];
-    return Math.max(...values);
-  }, [filteredTrades]);
+  const maxEntryValue = DEFAULT_FILTERS.Entry_Value[1];
+  const maxSize = DEFAULT_FILTERS.Size[1];
 
 
   const tabNames = ['Insights', 'Strategies', 'Data Table'];

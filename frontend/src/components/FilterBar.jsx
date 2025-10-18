@@ -45,7 +45,7 @@ export const DEFAULT_FILTERS = {
   Entry_Date: { start: null, end: null },
   Side: '',
   Option_Type: '',
-  Size: [0.1, 2000],
+  Size: [0.1, 3000],
   Entry_Value: [0, 100000000],
   Strike_Price: [],
   Expiration_Date: [],
