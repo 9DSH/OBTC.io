@@ -193,6 +193,35 @@ class DeribitClient:
         logger.info(f"[{instrument}] Fetched {len(trades_list)} trades.")
         return trades_list
 
+    def validate_and_clean_trades(self, trades: list) -> list:
+        """
+        Cleans the fetched trades list by removing any invalid entries.
+        Ensures Entry_Value, Size, and Price fields are numeric.
+        """
+        cleaned = []
+        for t in trades:
+            try:
+                entry_value = float(t.get('amount', 0)) * float(t.get('price', 0)) * float(t.get('index_price', 0))
+                size = float(t.get('amount', 0))
+                price_usd = float(t.get('price', 0)) * float(t.get('index_price', 0))
+                
+                # Validate they are all finite numbers
+                if not all(map(lambda x: isinstance(x, (int, float)) and not pd.isna(x) and abs(x) < 1e15, 
+                            [entry_value, size, price_usd])):
+                    continue  # skip invalid rows
+
+                # Attach cleaned values back
+                t["Entry_Value"] = entry_value
+                t["Size"] = size
+                t["Price_USD"] = price_usd
+
+                cleaned.append(t)
+            except Exception:
+                # Skip any malformed trade
+                continue
+
+        logger.info(f"Validated trades: kept {len(cleaned)} / {len(trades)} valid rows.")
+        return cleaned
 
     async def fetch_and_store_public_trades(self):
         try:
@@ -218,6 +247,13 @@ class DeribitClient:
                 for trades_list in results:
                     if not trades_list:
                         continue
+
+                    # 🔍 Validate data before saving
+                    trades_list = self.validate_and_clean_trades(trades_list)
+                    if not trades_list:
+                        logger.warning("All trades filtered out due to invalid data.")
+                        continue
+
 
                     def db_save_trades(trades):
                         session = SessionLocal()
