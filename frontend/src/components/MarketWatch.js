@@ -30,18 +30,25 @@ export default function MarketWatch({
 
   
   // Apply BlockTrade filter to trades
-  const filteredTrades = filters.BlockTrade
-    ? trades.filter(trade => {
-        const isBlockTrade = trade.BlockTrade_IDs && String(trade.BlockTrade_IDs).trim() !== '-';
-        return isBlockTrade;
-      })
-    : trades;
-
-  // Prepare multi-select options
-  const strikePrices = Array.from(new Set(filteredTrades.map(t => t.Strike_Price))).sort((a, b) => a - b);
-  const expirationDates = Array.from(new Set(filteredTrades.map(t => t.Expiration_Date || t.Expiration)))
-    .sort((a, b) => new Date(a) - new Date(b));
-
+  const filteredTrades = React.useMemo(() => {
+    if (!Array.isArray(trades)) return [];
+    return filters.BlockTrade
+      ? trades.filter(trade => {
+          const isBlockTrade = trade.BlockTrade_IDs && String(trade.BlockTrade_IDs).trim() !== '-';
+          return isBlockTrade;
+        })
+      : trades;
+  }, [trades, filters.BlockTrade]);
+  
+  const strikePrices = React.useMemo(() => (
+    Array.from(new Set(filteredTrades.map(t => t.Strike_Price))).sort((a, b) => a - b)
+  ), [filteredTrades]);
+  
+  const expirationDates = React.useMemo(() => (
+    Array.from(new Set(filteredTrades.map(t => t.Expiration_Date || t.Expiration)))
+      .sort((a, b) => new Date(a) - new Date(b))
+  ), [filteredTrades]);
+  
   const maxEntryValue = filteredTrades.length > 0
     ? Math.max(...filteredTrades.map(t => parseFloat(t.Entry_Value)).filter(v => !isNaN(v)))
     : DEFAULT_FILTERS.Entry_Value[1];
