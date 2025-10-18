@@ -59,29 +59,28 @@ export default function MarketWatch({
 
   function handleSegmentSelect(event) {
     if (!event) return;
-
     const {
       selectedSegment: newSelectedSegment,
       contextId: newContextId,
       selectedSegment_RightSide: newRightSideSegment,
       contextId_RightSide: newRightSideContextId
     } = event;
-
-    if (newSelectedSegment === null && newContextId === null) {
-      setSelectedSegment(null);
-      setContextId(null);
+  
+    if (
+      newSelectedSegment === selectedSegment &&
+      newContextId === contextId &&
+      newRightSideSegment === selectedSegment_RightSide &&
+      newRightSideContextId === contextId_RightSide
+    ) {
+      return; // prevent infinite re-trigger
     }
-
-    if (newRightSideSegment && newRightSideContextId) {
-      setSelectedSegment_RightSide(newRightSideSegment);
-      setContextId_RightSide(newRightSideContextId);
-    }
-
-    if (newSelectedSegment && newContextId) {
-      setSelectedSegment(newSelectedSegment);
-      setContextId(newContextId);
-    }
+  
+    setSelectedSegment(newSelectedSegment);
+    setContextId(newContextId);
+    setSelectedSegment_RightSide(newRightSideSegment);
+    setContextId_RightSide(newRightSideContextId);
   }
+  
 
   const renderTabContent = () => {
     switch (activeTab) {
