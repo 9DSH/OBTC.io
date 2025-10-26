@@ -85,28 +85,31 @@ export default function MarketWatch({
   }, [onSimulate]);
 
   // --- Prevent recursive updates ---
-  const handleSegmentSelect = useCallback((event) => {
+  function handleSegmentSelect(event) {
     if (!event) return;
 
     const {
-      selectedSegment: newSeg,
-      contextId: newCtx,
-      selectedSegment_RightSide: newRightSeg,
-      contextId_RightSide: newRightCtx
+      selectedSegment: newSelectedSegment,
+      contextId: newContextId,
+      selectedSegment_RightSide: newRightSideSegment,
+      contextId_RightSide: newRightSideContextId
     } = event;
 
-    // Compare using JSON stringified values to avoid false re-renders
-    const same =
-      JSON.stringify([newSeg, newCtx, newRightSeg, newRightCtx]) ===
-      JSON.stringify([selectedSegment, contextId, selectedSegment_RightSide, contextId_RightSide]);
+    if (newSelectedSegment === null && newContextId === null) {
+      setSelectedSegment(null);
+      setContextId(null);
+    }
 
-    if (same) return;
+    if (newRightSideSegment && newRightSideContextId) {
+      setSelectedSegment_RightSide(newRightSideSegment);
+      setContextId_RightSide(newRightSideContextId);
+    }
 
-    setSelectedSegment(newSeg ?? null);
-    setContextId(newCtx ?? null);
-    setSelectedSegment_RightSide(newRightSeg ?? null);
-    setContextId_RightSide(newRightCtx ?? null);
-  }, [selectedSegment, contextId, selectedSegment_RightSide, contextId_RightSide]);
+    if (newSelectedSegment && newContextId) {
+      setSelectedSegment(newSelectedSegment);
+      setContextId(newContextId);
+    }
+  }
 
   const renderTabContent = useCallback(() => {
     switch (activeTab) {
@@ -160,7 +163,7 @@ export default function MarketWatch({
           color: "#444"
         }}
       >
-        v1.0.74
+        v1.0.75
       </div>
 
       <TechnicalBar

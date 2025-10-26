@@ -25,15 +25,26 @@ export function generateYTicks(maxValue, chartHeight = 300) {
 
 // Format Y-axis labels like 250 → "250", 1000 → "1k", 1500 → "1.5k"
 export function formatStrikeLabel(value) {
-  return value >= 1000000
-    ? `${(value / 1000000).toFixed(value % 1000000 === 0 ? 0 : 1)}M`
-    : value >= 1000
-    ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}K`
-    : value < 1000 && value > 1
-    ? `${value.toFixed(0)}`
-    : value < 1
-    ? `${value.toFixed(1)}`
-    : String(value);
+  if (value == null || isNaN(value)) return '-';
+
+  const absVal = Math.abs(value);
+
+  if (absVal >= 1e12) {
+    return `${(value / 1e12).toFixed(value % 1e12 === 0 ? 0 : 1)}T`;
+  }
+  if (absVal >= 1e9) {
+    return `${(value / 1e9).toFixed(value % 1e9 === 0 ? 0 : 1)}B`;
+  }
+  if (absVal >= 1e6) {
+    return `${(value / 1e6).toFixed(value % 1e6 === 0 ? 0 : 1)}M`;
+  }
+  if (absVal >= 1e3) {
+    return `${(value / 1e3).toFixed(value % 1e3 === 0 ? 0 : 1)}K`;
+  }
+  if (absVal > 1) {
+    return value.toFixed(0);
+  }
+  return value.toFixed(1);
 }
 
 

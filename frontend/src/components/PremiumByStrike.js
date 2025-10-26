@@ -18,6 +18,7 @@ const GAP_X = 10;
 const Y_AXIS_WIDTH = 40;
 const MAX_LABEL_WIDTH = 80;
 const TOP_PADDING = 20;
+const MAX_Y = 10000000; // Arbitrary upper bound for y (adjust based on your maxEntry data, e.g., maxEntry * 10)
 
 function formatLargeNumber(value) {
   if (value >= 1e6) return (value / 1e6).toFixed(1) + "M";
@@ -63,6 +64,7 @@ export default function PremiumByStrike({
 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  const chartRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(MAX_WIDTH);
   const [tooltip, setTooltip] = useState({
     visible: false,
@@ -72,6 +74,18 @@ export default function PremiumByStrike({
   });
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [highlightedGroup, setHighlightedGroup] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const [yDragging, setYDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startY, setStartY] = useState(0);
+  const [startMin, setStartMin] = useState(0);
+  const [startMax, setStartMax] = useState(0);
+  const [startYMin, setStartYMin] = useState(0);
+  const [startYMax, setStartYMax] = useState(0);
+  const [minPrice, setMinPrice] = useState(1000);
+  const [maxPrice, setMaxPrice] = useState(400000);
+  const [userYMin, setUserYMin] = useState(0);
+  const [userYMax, setUserYMax] = useState(1000);
 
   // Group trades by ComboTrade_IDs, or Combo_ID with BlockTrade_IDs, or single trades
   const strategyGroups = useMemo(() => {
@@ -173,10 +187,23 @@ export default function PremiumByStrike({
     return allStrikes.sort((a, b) => a - b);
   }, [data]);
 
+  const { autoMin, autoMax } = useMemo(() => {
+    const minStrike = fullStrikes[0] ?? 0;
+    const maxStrike = fullStrikes[fullStrikes.length - 1] ?? 0;
+    const range = maxStrike - minStrike || 10000;
+    const buffer = 5;
+    const autoMin = Math.max(1000, Math.floor((minStrike - range * buffer) / 1000) * 1000);
+    const autoMax = Math.min(400000, Math.ceil((maxStrike + range * buffer) / 1000) * 1000);
+    return { autoMin, autoMax };
+  }, [fullStrikes]);
+
+  useEffect(() => {
+    setMinPrice(autoMin);
+    setMaxPrice(autoMax);
+  }, [autoMin, autoMax]);
+
   // Filter data per filters prop, applying BlockTrade filter explicitly
   const filtered = useMemo(() => {
-
-
     const result = data.filter((item) => {
       // Apply BlockTrade filter explicitly
       if (filters?.BlockTrade) {
@@ -206,8 +233,6 @@ export default function PremiumByStrike({
           const start = v.start ? new Date(v.start) : null;
           const end = v.end ? new Date(v.end) : null;
 
-
-
           if (start && isNaN(start.getTime())) return true;
           if (end && isNaN(end.getTime())) return true;
 
@@ -229,12 +254,11 @@ export default function PremiumByStrike({
       });
     });
 
-
     return result;
   }, [data, filters]);
 
   // Group filtered data by Strike and label, track max entry for scale
-  const { groups, maxEntry } = useMemo(() => {
+  const { groups, maxEntry, yMin, yMax } = useMemo(() => {
     const m = new Map();
     let max = 0;
     filtered.forEach((d) => {
@@ -244,37 +268,66 @@ export default function PremiumByStrike({
       m.get(s).push({ label, value: d.Entry_Value, raw: d });
       max = Math.max(max, d.Entry_Value);
     });
-    return { groups: m, maxEntry: max };
+    return { groups: m, maxEntry: max, yMin: 0, yMax: max || 1000 };
   }, [filtered]);
+
+  useEffect(() => {
+    setUserYMin(yMin);
+    setUserYMax(yMax);
+  }, [yMin, yMax]);
 
   // Fallback safe values for scales
   const safeStrikes = fullStrikes.length > 0 ? fullStrikes : [0];
   const safeMaxEntry = maxEntry || 1;
 
-  // Generate Y ticks for axis
-  const yTicks = generateYTicks(safeMaxEntry, MAX_HEIGHT);
+  // Displayed strikes based on zoom
+  const displayedStrikes = useMemo(() => {
+    let strikes = fullStrikes.filter((s) => s >= minPrice && s <= maxPrice).sort((a, b) => a - b);
+    if (strikes.length === 0) {
+      strikes = [...fullStrikes].sort((a, b) => a - b);
+    }
+    return strikes;
+  }, [fullStrikes, minPrice, maxPrice]);
+
+  const minDisplayed = displayedStrikes[0] ?? 0;
+  const maxDisplayed = displayedStrikes[displayedStrikes.length - 1] ?? 0;
 
   // Scales for coordinates
-  const minStrike = safeStrikes[0];
-  const maxStrike = safeStrikes[safeStrikes.length - 1];
   const xScale =
-    (containerWidth - (safeStrikes.length - 1) * GAP_X) / (maxStrike - minStrike || 1);
-  const getX = (s) => (s - minStrike) * xScale + safeStrikes.indexOf(s) * GAP_X;
-  const getY = (v) => (v / safeMaxEntry) * (MAX_HEIGHT - TOP_PADDING);
+    (containerWidth - (displayedStrikes.length - 1) * GAP_X) / (maxDisplayed - minDisplayed || 1);
+  const getX = (s) => (s - minDisplayed) * xScale + displayedStrikes.indexOf(s) * GAP_X;
+  const yRange = userYMax - userYMin || 1;
+  const plotHeight = MAX_HEIGHT - TOP_PADDING;
+  const getHeight = (v) => ((v - userYMin) / yRange) * plotHeight;
+  const getY = (v) => MAX_HEIGHT - getHeight(v);
+
+  // Generate Y ticks
+  const yTicks = useMemo(() => {
+    const numTicksTarget = 2;
+    const tickStep = getRoundedStep((userYMax - userYMin) / numTicksTarget);
+    const firstTick = Math.ceil(userYMin / tickStep) * tickStep;
+    const ticks = [];
+    for (let t = firstTick; t <= userYMax; t += tickStep) {
+      ticks.push(t);
+    }
+    return ticks;
+  }, [userYMin, userYMax]);
 
   // Compute points for canvas drawing
   const points = useMemo(() => {
     let pts = [];
-    safeStrikes.forEach((s) => {
+    displayedStrikes.forEach((s) => {
       (groups.get(s) || []).forEach((pt) => {
+        const v = pt.value;
+        if (v < userYMin || v > userYMax) return;
         const x = getX(s);
-        const y = MAX_HEIGHT - getY(pt.value);
+        const y = getY(v);
         const color = COLORS[pt.label];
         pts.push({ x, y, color, raw: pt.raw });
       });
     });
     return pts;
-  }, [safeStrikes, groups, maxEntry, containerWidth]);
+  }, [displayedStrikes, groups, userYMin, userYMax, containerWidth, minPrice, maxPrice]);
 
   // Draw points on canvas
   useEffect(() => {
@@ -364,12 +417,40 @@ export default function PremiumByStrike({
       setHighlightedGroup(null);
       setTooltip((t) => ({ ...t, visible: false }));
     }
+
+    if (dragging) {
+      const delta = e.clientX - startX;
+      const plotWidth = rect.width - Y_AXIS_WIDTH;
+      const range = startMax - startMin;
+      const shift = (delta / plotWidth) * range * -1;
+      let newMin = startMin + shift;
+      let newMax = startMax + shift;
+      newMin = Math.max(1000, Math.min(newMin, 400000 - range));
+      newMax = Math.min(400000, Math.max(newMax, 1000 + range));
+      if (newMin < newMax) {
+        setMinPrice(newMin);
+        setMaxPrice(newMax);
+      }
+    } else if (yDragging) {
+      const deltaY = e.clientY - startY;
+      const rangeY = startYMax - startYMin;
+      const shift = - (deltaY / plotHeight) * rangeY;
+      const newYMin = 0; // Anchor yMin at 0
+      let newYMax = startYMax + shift;
+      newYMax = Math.min(MAX_Y, Math.max(newYMax, 1)); // Ensure min range of 1
+      if (newYMin < newYMax) {
+        setUserYMin(newYMin);
+        setUserYMax(newYMax);
+      }
+    }
   };
 
   const handleMouseLeave = () => {
     setHoveredPoint(null);
     setHighlightedGroup(null);
     setTooltip((t) => ({ ...t, visible: false }));
+    setDragging(false);
+    setYDragging(false);
   };
 
   // Click handler to send selected group or single trade
@@ -407,7 +488,7 @@ export default function PremiumByStrike({
 
   // X axis label skipping to prevent overlap
   const maxLabels = Math.floor(containerWidth / MAX_LABEL_WIDTH);
-  const skip = safeStrikes.length > maxLabels ? Math.ceil(safeStrikes.length / maxLabels) : 1;
+  const skip = displayedStrikes.length > maxLabels ? Math.ceil(displayedStrikes.length / maxLabels) : 1;
 
   // Label collision handling for hovered group
   const labelCollisionHandling = () => {
@@ -510,18 +591,85 @@ export default function PremiumByStrike({
             })}
           </div>
 
-          <div style={{ display: "flex", alignItems: "flex-end", position: "relative" }}>
+          <div
+            ref={chartRef}
+            style={{ display: "flex", alignItems: "flex-end", position: "relative" }}
+            onMouseDown={(e) => {
+              const rect = chartRef.current.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              setStartX(e.clientX);
+              setStartY(e.clientY);
+              setStartMin(minPrice);
+              setStartMax(maxPrice);
+              setStartYMin(userYMin);
+              setStartYMax(userYMax);
+              if (mouseX < Y_AXIS_WIDTH) {
+                setYDragging(true);
+              } else {
+                setDragging(true);
+              }
+            }}
+            onMouseMove={handleMouseMove}
+            onMouseUp={() => {
+              setDragging(false);
+              setYDragging(false);
+            }}
+            onMouseLeave={handleMouseLeave}
+            onWheel={(e) => {
+              e.preventDefault();
+              const rect = chartRef.current.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+              const yAxisWidth = Y_AXIS_WIDTH;
+              if (mouseX < yAxisWidth) {
+                // Y zoom, keep yMin at 0
+                const currentRange = userYMax - userYMin;
+                const marginTop = TOP_PADDING;
+                const marginBottom = 0;
+                const fractionFromTop = Math.max(0, Math.min(1, (mouseY - marginTop) / plotHeight));
+                const pos = userYMax - fractionFromTop * currentRange;
+                const factor = e.deltaY > 0 ? 1.1 : 0.9;
+                let newRange = currentRange * factor;
+                const minRangeY = 1;
+                const maxRangeY = MAX_Y;
+                newRange = Math.max(minRangeY, Math.min(newRange, maxRangeY));
+                const newYMin = 0; // Anchor yMin at 0
+                const newYMax = newRange; // Since yMin is 0, yMax is the full range
+                if (newYMin < newYMax) {
+                  setUserYMin(newYMin);
+                  setUserYMax(newYMax);
+                }
+              } else {
+                // X zoom
+                const plotWidth = rect.width - yAxisWidth;
+                const mousePlotX = mouseX - yAxisWidth;
+                const fraction = mousePlotX / plotWidth;
+                const currentRange = maxPrice - minPrice;
+                const pos = minPrice + fraction * currentRange;
+                const factor = e.deltaY > 0 ? 1.1 : 0.9;
+                const newRange = currentRange * factor;
+                const minRange = 1000;
+                const maxRange = 400000 - 1000;
+                const clampedNewRange = Math.max(minRange, Math.min(newRange, maxRange));
+                let newMin = pos - fraction * clampedNewRange;
+                let newMax = pos + (1 - fraction) * clampedNewRange;
+                newMin = Math.max(1000, newMin);
+                newMax = Math.min(400000, newMax);
+                if (newMin < newMax) {
+                  setMinPrice(newMin);
+                  setMaxPrice(newMax);
+                }
+              }
+            }}
+          >
             <div
               style={{
                 width: Y_AXIS_WIDTH,
                 height: MAX_HEIGHT,
-                display: "flex",
-                flexDirection: "column-reverse",
-                justifyContent: "space-between",
+                position: "relative",
                 fontSize: 12,
                 boxSizing: "border-box",
                 color: "white",
-                position: "relative",
                 userSelect: "none",
               }}
             >
@@ -529,25 +677,23 @@ export default function PremiumByStrike({
                 <div
                   key={t}
                   style={{
-                    height: MAX_HEIGHT / (yTicks.length - 1),
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "flex-end",
-                    paddingLeft: 12,
-                    pointerEvents: "none",
+                    position: "absolute",
+                    top: `${getY(t)}px`,
+                    right: 10,
+                    transform: "translateY(-50%)",
+                    fontSize: 11,
                     opacity: hoveredPoint ? 0.3 : 1,
                     transition: "opacity 0.1s ease",
-                    fontSize: 11,
                   }}
                 >
-                  {t >= 1e6 ? `${t / 1e6}M` : t >= 1e3 ? `${t / 1e3}k` : t}
+                  {formatLargeNumber(t)}
                 </div>
               ))}
               <div
                 style={{
                   position: "absolute",
                   top: "50%",
-                  left: -50,
+                  left: -60,
                   transform: "translateY(-50%) rotate(-90deg)",
                   fontSize: 12,
                   color: "rgb(149, 149, 149)",
@@ -571,7 +717,6 @@ export default function PremiumByStrike({
                 cursor: hoveredPoint ? "pointer" : "default",
                 display: "block",
                 width: "100%",
-                marginLeft: 20,
               }}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
@@ -604,7 +749,7 @@ export default function PremiumByStrike({
           </div>
 
           <div style={{ position: "relative", height: 40, marginLeft: Y_AXIS_WIDTH }}>
-            {safeStrikes.map(
+            {displayedStrikes.map(
               (s, i) =>
                 i % skip === 0 && (
                   <div
